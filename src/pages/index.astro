@@ -1,0 +1,31 @@
+---
+import BaseHead from '../components/BaseHead.astro';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
+	</head>
+	<body>
+		<Header />
+		<main>
+			<h1>👋 Hi, I'm Omar Qureshi</h1>
+			<p>
+				Welcome to my personal blog. I write about <strong>Cloud Engineering</strong>, <strong>DevOps</strong>, and <strong>Software Engineering</strong>.
+			</p>
+			<p>
+				Here you will find my thoughts, tutorials, and experiences navigating the world of modern infrastructure and software development.
+			</p>
+			<h3>Contact Details</h3>
+			<ul>
+				<li><strong>Email:</strong> <a href="mailto:omar@omarqureshi.net">omar@omarqureshi.net</a></li>
+				<li><strong>LinkedIn:</strong> <a href="https://www.linkedin.com/in/omaraliqureshi/">omaraliqureshi</a></li>
+			</ul>
+		</main>
+		<Footer />
+	</body>
+</html>

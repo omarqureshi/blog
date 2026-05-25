@@ -1,0 +1,62 @@
+PATH
+  remote: ../../../../aws-cdk/aws-cdk/node_modules/@aws-cdk/asset-awscli-v1/dist/ruby
+  specs:
+    aws-cdk-asset-awscli-v1 (2.2.273)
+      jsii-ruby-runtime (< 0.0.1)
+
+PATH
+  remote: ../../../../aws-cdk/aws-cdk/node_modules/@aws-cdk/asset-node-proxy-agent-v6/dist/ruby
+  specs:
+    aws-cdk-asset-node-proxy-agent-v6 (2.1.1)
+      jsii-ruby-runtime (< 0.0.1)
+
+PATH
+  remote: ../../../../aws-cdk/aws-cdk/node_modules/@aws-cdk/cloud-assembly-schema/dist/ruby
+  specs:
+    aws-cdk-cloud-assembly-schema (53.25.0)
+      jsii-ruby-runtime (< 0.0.1)
+
+PATH
+  remote: ../../../../aws-cdk/aws-cdk/packages/aws-cdk-lib/dist/ruby
+  specs:
+    aws-cdk-lib (0.0.0)
+      jsii-ruby-runtime (< 0.0.1)
+
+PATH
+  remote: ../../../../aws-cdk/constructs/dist/ruby
+  specs:
+    constructs (0.0.0)
+      jsii-ruby-runtime (< 0.0.1)
+
+PATH
+  remote: ../../../../aws-cdk/jsii/packages/@jsii/ruby-runtime
+  specs:
+    jsii-ruby-runtime (0.0.0)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+
+PLATFORMS
+  ruby
+  x86_64-linux-gnu
+
+DEPENDENCIES
+  aws-cdk-asset-awscli-v1!
+  aws-cdk-asset-node-proxy-agent-v6!
+  aws-cdk-cloud-assembly-schema!
+  aws-cdk-lib!
+  constructs!
+  jsii-ruby-runtime!
+
+CHECKSUMS
+  aws-cdk-asset-awscli-v1 (2.2.273)
+  aws-cdk-asset-node-proxy-agent-v6 (2.1.1)
+  aws-cdk-cloud-assembly-schema (53.25.0)
+  aws-cdk-lib (0.0.0)
+  bundler (4.0.11) sha256=5bcec0fb78302e48d02ee46f10ee6e6942be647ba5b44a6d1ddfda9a240ce785
+  constructs (0.0.0)
+  jsii-ruby-runtime (0.0.0)
+
+BUNDLED WITH
+  4.0.11
