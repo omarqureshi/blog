@@ -2,11 +2,11 @@
 require 'aws-cdk-lib'
 require_relative 'stacks/blog_stack'
 
-app = AwsCdk::App.new
+app = AWSCDK::App.new
 
 # The domain and site name configurations
 BlogStack.new(app, 'BlogStack', {
-  env: AwsCdk::Environment.new(
+  env: AWSCDK::Environment.new(
     account: ENV['CDK_DEFAULT_ACCOUNT'],
     region: 'us-east-1' # us-east-1 is required for CloudFront ACM certificates
   )

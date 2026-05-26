@@ -2,12 +2,24 @@
 
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
+import mermaid from 'astro-mermaid';
 import { defineConfig, fontProviders } from 'astro/config';
 
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://example.com',
-	integrations: [mdx(), sitemap()],
+	integrations: [
+		mermaid({
+			theme: 'dark',
+			mermaidConfig: {
+				themeVariables: {
+					fontSize: '24px',
+				},
+			},
+		}),
+		mdx(),
+		sitemap(),
+	],
 	fonts: [
 		{
 			provider: fontProviders.local(),

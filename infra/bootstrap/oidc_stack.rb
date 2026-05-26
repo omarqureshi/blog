@@ -19,7 +19,7 @@ class OIDCStack < AWSCDK::Stack
     })
 
     # 2. Create the IAM Role assumed by GitHub Actions
-    github_org = 'omar' # Update this if your GitHub username is different
+    github_org = 'omarqureshi' # Update this if your GitHub username is different
     github_repo = 'blog' # Update this if your repository name is different
 
     role = AWSCDK::AWSIAM::Role.new(self, 'GitHubActionsDeployRole', {

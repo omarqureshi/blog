@@ -15,25 +15,95 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          path: blog
+
+      - name: Checkout JSII
+        uses: actions/checkout@v4
+        with:
+          repository: omarqureshi/jsii
+          ref: ruby-language-bindings
+          path: jsii
+
+      - name: Checkout Constructs
+        uses: actions/checkout@v4
+        with:
+          repository: aws/constructs
+          ref: 10.x
+          path: constructs
+
+      - name: Checkout AWS CDK
+        uses: actions/checkout@v4
+        with:
+          repository: aws/aws-cdk
+          ref: main
+          path: aws-cdk
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-
-      - name: Install Node dependencies
-        run: npm ci
-
-      - name: Build Astro site
-        run: npm run build
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          working-directory: infra
-          bundler-cache: true
+
+      - name: Cache Build Artifacts
+        id: cache-build
+        uses: actions/cache@v4
+        with:
+          path: |
+            jsii/node_modules
+            constructs/node_modules
+            aws-cdk/node_modules
+            constructs/dist/ruby
+            aws-cdk/packages/aws-cdk-lib/dist/ruby
+          key: ${{ runner.os }}-cdk-ruby-build-${{ hashFiles('jsii/yarn.lock', 'constructs/yarn.lock', 'aws-cdk/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cdk-ruby-build-
+
+      - name: Build Blog Site
+        working-directory: blog
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Custom JSII
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        working-directory: jsii
+        run: |
+          yarn install
+          yarn build
+
+      - name: Build Constructs Ruby Gem
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        working-directory: constructs
+        run: |
+          jq '.jsii.targets.ruby = {"gem": "constructs", "module": "Constructs"}' package.json > package.json.tmp && mv package.json.tmp package.json
+          yarn install
+          yarn build
+          node ../jsii/packages/jsii-pacmak/bin/jsii-pacmak -t ruby
+
+      - name: Build AWS CDK Lib Ruby Gem
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        working-directory: aws-cdk
+        run: |
+          cd packages/aws-cdk-lib
+          jq '.jsii.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' package.json > package.json.tmp && mv package.json.tmp package.json
+          cd ../..
+          yarn install
+          npx lerna run build --scope aws-cdk-lib --include-dependencies
+          cd packages/aws-cdk-lib
+          node ../../../jsii/packages/jsii-pacmak/bin/jsii-pacmak -t ruby
+
+      - name: Link Local Gems
+        working-directory: blog/infra
+        run: |
+          sed -i "s/gem 'constructs'.*/gem 'constructs', path: '..\/..\/constructs\/dist\/ruby\/constructs'/" Gemfile
+          sed -i "s/gem 'aws-cdk-lib'.*/gem 'aws-cdk-lib', path: '..\/..\/aws-cdk\/packages\/aws-cdk-lib\/dist\/ruby\/aws-cdk-lib'/" Gemfile
+          bundle config set --local path 'vendor/bundle'
+          bundle install
 
       - name: Install CDK CLI globally
         run: npm install -g aws-cdk
@@ -41,9 +111,9 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::YOUR_AWS_ACCOUNT_ID:role/GitHubActionsCDKRole
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKRole
           aws-region: us-east-1
 
       - name: Deploy CDK Stack
-        working-directory: infra
-        run: cdk deploy --require-approval never
+        working-directory: blog/infra
+        run: bundle exec cdk deploy --require-approval never
