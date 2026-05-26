@@ -86,7 +86,7 @@ jobs:
           yarn build
           jq '.jsii.targets.ruby = {"gem": "constructs", "module": "Constructs"}' package.json > package.json.tmp && mv package.json.tmp package.json
           jq '.targets.ruby = {"gem": "constructs", "module": "Constructs"}' .jsii > .jsii.tmp && mv .jsii.tmp .jsii
-          node ../jsii/packages/jsii-pacmak/bin/jsii-pacmak . -v -t ruby
+          node ../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
 
       - name: Build AWS CDK Lib Ruby Gem
         if: steps.cache-build.outputs.cache-hit != 'true'
@@ -98,7 +98,7 @@ jobs:
           cd packages/aws-cdk-lib
           jq '.jsii.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' package.json > package.json.tmp && mv package.json.tmp package.json
           jq '.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' .jsii > .jsii.tmp && mv .jsii.tmp .jsii
-          node ../../../jsii/packages/jsii-pacmak/bin/jsii-pacmak . -v -t ruby
+          node ../../../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
 
       - name: Link Local Gems
         working-directory: blog/infra
