@@ -49,12 +49,18 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
-          working-directory: blog/infra
 
       - name: Get JSII Commit SHA
         id: jsii-commit
         run: echo "sha=$(git -C jsii rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Cache Ruby Gems
+        uses: actions/cache@v4
+        with:
+          path: blog/infra/vendor/bundle
+          key: ${{ runner.os }}-gems-${{ hashFiles('blog/infra/Gemfile') }}
+          restore-keys: |
+            ${{ runner.os }}-gems-
 
       - name: Cache Build Artifacts
         id: cache-build
