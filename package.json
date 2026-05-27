@@ -17,7 +17,7 @@
     "@astrojs/rss": "^4.0.18",
     "@astrojs/sitemap": "^3.7.2",
     "@fontsource/alice": "^5.2.8",
-    "@omarqureshi/jsii-runtime": ">=0.0.0-pre",
+    "@jsii/runtime": "^5.0.0",
     "amazon-cognito-identity-js": "^6.3.16",
     "astro": "^6.3.7",
     "astro-mermaid": "^2.0.1",

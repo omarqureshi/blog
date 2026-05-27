@@ -62,18 +62,6 @@ jobs:
           echo "NPM_VERSION=0.0.0-pre.$TIMESTAMP" >> $GITHUB_ENV
           echo "GEM_VERSION=0.0.0.pre.$TIMESTAMP" >> $GITHUB_ENV
 
-      - name: Publish @omarqureshi/jsii-runtime (NPM)
-        working-directory: jsii
-        run: |
-          corepack enable
-          yarn install
-          yarn build
-          cd packages/@jsii/runtime
-          jq ".name = \"@omarqureshi/jsii-runtime\" | .repository.url = \"git+https://github.com/omarqureshi/blog.git\" | .version = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
-          yarn config set npmRegistryServer "https://npm.pkg.github.com"
-          yarn config set npmAuthToken "${{ secrets.GITHUB_TOKEN }}"
-          yarn npm publish
-
       - name: Publish jsii-ruby-runtime (RubyGem)
         working-directory: jsii/packages/@jsii/ruby-runtime
         run: |
