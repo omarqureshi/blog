@@ -70,9 +70,9 @@ jobs:
             jsii/packages/@jsii/ruby-runtime
             constructs/dist/ruby
             aws-cdk/packages/aws-cdk-lib/dist/ruby
-            aws-cdk/packages/@aws-cdk/asset-awscli-v1/dist/ruby
-            aws-cdk/packages/@aws-cdk/asset-node-proxy-agent-v6/dist/ruby
-            aws-cdk/packages/@aws-cdk/cloud-assembly-schema/dist/ruby
+            aws-cdk/node_modules/@aws-cdk/asset-awscli-v1/dist/ruby
+            aws-cdk/node_modules/@aws-cdk/asset-node-proxy-agent-v6/dist/ruby
+            aws-cdk/node_modules/@aws-cdk/cloud-assembly-schema/dist/ruby
           key: ${{ runner.os }}-cdk-ruby-build-${{ steps.jsii-commit.outputs.sha }}-${{ hashFiles('constructs/yarn.lock', 'aws-cdk/yarn.lock') }}
           restore-keys: |
             ${{ runner.os }}-cdk-ruby-build-
