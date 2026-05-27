@@ -67,7 +67,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
+            jsii/node_modules
             jsii/packages/@jsii/ruby-runtime
+            jsii/packages/@jsii/runtime
             constructs/dist/ruby
             aws-cdk/packages/aws-cdk-lib/dist/ruby
             aws-cdk/node_modules/@aws-cdk/asset-awscli-v1/dist/ruby
