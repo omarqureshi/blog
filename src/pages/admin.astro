@@ -1,0 +1,20 @@
+---
+import BaseHead from '../components/BaseHead.astro';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import AdminDashboard from '../components/AdminDashboard.jsx';
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<BaseHead title="Admin Dashboard" description="Analytics Dashboard" />
+	</head>
+	<body>
+		<Header />
+		<main>
+			<AdminDashboard client:only="react" />
+		</main>
+		<Footer />
+	</body>
+</html>
