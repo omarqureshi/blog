@@ -40,9 +40,10 @@ jobs:
 
       - name: Fetch Remote Gems
         working-directory: blog/infra
+        env:
+          BUNDLE_RUBYGEMS__PKG__GITHUB__COM: omarqureshi:${{ secrets.GITHUB_TOKEN }}
         run: |
           bundle config set --local path 'vendor/bundle'
-          bundle config set --local https://rubygems.pkg.github.com/ omarqureshi:${{ secrets.GITHUB_TOKEN }}
           bundle install
           bundle update jsii-ruby-runtime constructs aws-cdk-lib aws-cdk-asset-awscli-v1 aws-cdk-asset-node-proxy-agent-v6 aws-cdk-cloud-assembly-schema
 
@@ -58,5 +59,6 @@ jobs:
       - name: Deploy CDK Stack
         working-directory: blog/infra
         env:
+          BUNDLE_RUBYGEMS__PKG__GITHUB__COM: omarqureshi:${{ secrets.GITHUB_TOKEN }}
           JSII_RUNTIME: ${{ github.workspace }}/blog/node_modules/@jsii/runtime/bin/jsii-runtime
         run: bundle exec cdk deploy --require-approval never
