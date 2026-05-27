@@ -20,6 +20,16 @@ jobs:
         with:
           path: blog
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+
       - name: Build Blog Site
         working-directory: blog
         env:
