@@ -1,0 +1,128 @@
+name: Publish Pre-release Packages
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *' # Nightly at midnight UTC
+
+permissions:
+  packages: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout JSII
+        uses: actions/checkout@v4
+        with:
+          repository: omarqureshi/jsii
+          ref: ruby-language-bindings
+          path: jsii
+
+      - name: Checkout Constructs
+        uses: actions/checkout@v4
+        with:
+          repository: aws/constructs
+          ref: 10.x
+          path: constructs
+
+      - name: Checkout AWS CDK
+        uses: actions/checkout@v4
+        with:
+          repository: aws/aws-cdk
+          ref: main
+          path: aws-cdk
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+
+      - name: Authenticate RubyGems
+        run: |
+          mkdir -p ~/.gem
+          cat << EOF > ~/.gem/credentials
+          ---
+          :github: Bearer ${{ secrets.GITHUB_TOKEN }}
+          EOF
+          chmod 0600 ~/.gem/credentials
+
+      - name: Generate Dynamic Version
+        id: version
+        run: |
+          TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          echo "NPM_VERSION=0.0.0-pre.$TIMESTAMP" >> $GITHUB_ENV
+          echo "GEM_VERSION=0.0.0.pre.$TIMESTAMP" >> $GITHUB_ENV
+
+      - name: Publish @omarqureshi/jsii-runtime (NPM)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: jsii
+        run: |
+          corepack enable
+          yarn install
+          yarn build
+          cd packages/@jsii/runtime
+          jq '.name = "@omarqureshi/jsii-runtime" | .repository.url = "git+https://github.com/omarqureshi/blog.git"' package.json > tmp.json && mv tmp.json package.json
+          npm version ${{ env.NPM_VERSION }} --no-git-tag-version
+          npm publish
+
+      - name: Publish jsii-ruby-runtime (RubyGem)
+        working-directory: jsii/packages/@jsii/ruby-runtime
+        run: |
+          # The gemspec dynamically pulls version from package.json
+          npm version ${{ env.NPM_VERSION }} --no-git-tag-version
+          gem build jsii-ruby-runtime.gemspec
+          gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
+
+      - name: Publish constructs (RubyGem)
+        working-directory: constructs
+        run: |
+          corepack enable
+          yarn install
+          yarn build
+          npm version ${{ env.NPM_VERSION }} --no-git-tag-version
+          jq '.jsii.targets.ruby = {"gem": "constructs", "module": "Constructs"}' package.json > tmp.json && mv tmp.json package.json
+          jq '.targets.ruby = {"gem": "constructs", "module": "Constructs"}' .jsii > tmp.jsii && mv tmp.jsii .jsii
+          node ../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
+          cd dist/ruby
+          gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
+
+      - name: Publish AWS CDK (RubyGems)
+        working-directory: aws-cdk
+        run: |
+          corepack enable
+          yarn install
+          npx lerna run build --scope aws-cdk-lib --include-dependencies
+
+          # Publish nested dependencies
+          for pkg in asset-awscli-v1 asset-node-proxy-agent-v6 cloud-assembly-schema; do
+            echo "Publishing dependency: $pkg"
+            cd node_modules/@aws-cdk/$pkg
+            npm version ${{ env.NPM_VERSION }} --no-git-tag-version
+            GEM_NAME="aws-cdk-$pkg"
+            MODULE_NAME=$(echo "$GEM_NAME" | sed -r 's/(^|-)([a-z])/\U\2/g')
+            jq ".jsii.targets.ruby = {\"gem\": \"$GEM_NAME\", \"module\": \"$MODULE_NAME\"}" package.json > tmp.json && mv tmp.json package.json
+            jq ".targets.ruby = {\"gem\": \"$GEM_NAME\", \"module\": \"$MODULE_NAME\"}" .jsii > tmp.jsii && mv tmp.jsii .jsii
+            node ../../../../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
+            cd dist/ruby
+            gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
+            cd ../../../../
+          done
+
+          # Publish main lib
+          cd packages/aws-cdk-lib
+          npm version ${{ env.NPM_VERSION }} --no-git-tag-version
+          jq '.jsii.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' package.json > tmp.json && mv tmp.json package.json
+          jq '.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' .jsii > tmp.jsii && mv tmp.jsii .jsii
+          node ../../../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
+          cd dist/ruby
+          gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem

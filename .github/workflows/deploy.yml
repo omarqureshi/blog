@@ -19,124 +19,18 @@ jobs:
         with:
           path: blog
 
-      - name: Checkout JSII
-        uses: actions/checkout@v4
-        with:
-          repository: omarqureshi/jsii
-          ref: ruby-language-bindings
-          path: jsii
-
-      - name: Checkout Constructs
-        uses: actions/checkout@v4
-        with:
-          repository: aws/constructs
-          ref: 10.x
-          path: constructs
-
-      - name: Checkout AWS CDK
-        uses: actions/checkout@v4
-        with:
-          repository: aws/aws-cdk
-          ref: main
-          path: aws-cdk
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-
-      - name: Get JSII Commit SHA
-        id: jsii-commit
-        run: echo "sha=$(git -C jsii rev-parse HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Cache Ruby Gems
-        uses: actions/cache@v4
-        with:
-          path: blog/infra/vendor/bundle
-          key: ${{ runner.os }}-gems-${{ hashFiles('blog/infra/Gemfile') }}
-          restore-keys: |
-            ${{ runner.os }}-gems-
-
-      - name: Cache Build Artifacts
-        id: cache-build
-        uses: actions/cache@v4
-        with:
-          path: |
-            jsii/node_modules
-            jsii/packages/@jsii/ruby-runtime
-            jsii/packages/@jsii/runtime
-            constructs/dist/ruby
-            aws-cdk/packages/aws-cdk-lib/dist/ruby
-            aws-cdk/node_modules/@aws-cdk/asset-awscli-v1/dist/ruby
-            aws-cdk/node_modules/@aws-cdk/asset-node-proxy-agent-v6/dist/ruby
-            aws-cdk/node_modules/@aws-cdk/cloud-assembly-schema/dist/ruby
-          key: ${{ runner.os }}-cdk-ruby-build-${{ steps.jsii-commit.outputs.sha }}-${{ hashFiles('constructs/yarn.lock', 'aws-cdk/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cdk-ruby-build-
-
       - name: Build Blog Site
         working-directory: blog
         run: |
           npm ci
           npm run build
 
-      - name: Build Custom JSII
-        if: steps.cache-build.outputs.cache-hit != 'true'
-        working-directory: jsii
-        run: |
-          corepack enable
-          yarn install
-          yarn build
-
-      - name: Build Constructs Ruby Gem
-        if: steps.cache-build.outputs.cache-hit != 'true'
-        working-directory: constructs
-        run: |
-          corepack enable
-          yarn install
-          yarn build
-          jq '.jsii.targets.ruby = {"gem": "constructs", "module": "Constructs"}' package.json > package.json.tmp && mv package.json.tmp package.json
-          jq '.targets.ruby = {"gem": "constructs", "module": "Constructs"}' .jsii > .jsii.tmp && mv .jsii.tmp .jsii
-          node ../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
-
-      - name: Build AWS CDK Lib Ruby Gem
-        if: steps.cache-build.outputs.cache-hit != 'true'
-        working-directory: aws-cdk
-        run: |
-          corepack enable
-          yarn install
-          npx lerna run build --scope aws-cdk-lib --include-dependencies
-          
-          # Build nested dependencies
-          for pkg in asset-awscli-v1 asset-node-proxy-agent-v6 cloud-assembly-schema; do
-            echo "Building dependency: $pkg"
-            cd node_modules/@aws-cdk/$pkg
-            GEM_NAME="aws-cdk-$pkg"
-            MODULE_NAME=$(echo "$GEM_NAME" | sed -r 's/(^|-)([a-z])/\U\2/g')
-            jq ".jsii.targets.ruby = {\"gem\": \"$GEM_NAME\", \"module\": \"$MODULE_NAME\"}" package.json > package.json.tmp && mv package.json.tmp package.json
-            jq ".targets.ruby = {\"gem\": \"$GEM_NAME\", \"module\": \"$MODULE_NAME\"}" .jsii > .jsii.tmp && mv .jsii.tmp .jsii
-            node ../../../../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
-            cd ../../../
-          done
-          
-          # Build main lib
-          cd packages/aws-cdk-lib
-          jq '.jsii.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' package.json > package.json.tmp && mv package.json.tmp package.json
-          jq '.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' .jsii > .jsii.tmp && mv .jsii.tmp .jsii
-          node ../../../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
-
-      - name: Link Local Gems
+      - name: Fetch Remote Gems
         working-directory: blog/infra
-        env:
-          JSII_BASE_PATH: ../..
         run: |
           bundle config set --local path 'vendor/bundle'
-          bundle install
+          bundle config set --local https://rubygems.pkg.github.com/ omarqureshi:${{ secrets.GITHUB_TOKEN }}
+          bundle update jsii-ruby-runtime constructs aws-cdk-lib aws-cdk-asset-awscli-v1 aws-cdk-asset-node-proxy-agent-v6 aws-cdk-cloud-assembly-schema
 
       - name: Install CDK CLI globally
         run: npm install -g aws-cdk
@@ -150,6 +44,5 @@ jobs:
       - name: Deploy CDK Stack
         working-directory: blog/infra
         env:
-          JSII_BASE_PATH: ../..
-          JSII_RUNTIME: ${{ github.workspace }}/jsii/packages/@jsii/runtime/bin/jsii-runtime
+          JSII_RUNTIME: ${{ github.workspace }}/blog/node_modules/@omarqureshi/jsii-runtime/bin/jsii-runtime
         run: bundle exec cdk deploy --require-approval never
