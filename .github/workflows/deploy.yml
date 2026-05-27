@@ -43,6 +43,7 @@ jobs:
         run: |
           bundle config set --local path 'vendor/bundle'
           bundle config set --local https://rubygems.pkg.github.com/ omarqureshi:${{ secrets.GITHUB_TOKEN }}
+          bundle install
           bundle update jsii-ruby-runtime constructs aws-cdk-lib aws-cdk-asset-awscli-v1 aws-cdk-asset-node-proxy-agent-v6 aws-cdk-cloud-assembly-schema
 
       - name: Install CDK CLI globally
