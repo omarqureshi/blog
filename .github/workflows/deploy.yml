@@ -8,6 +8,7 @@ on:
 permissions:
   id-token: write # Required for requesting the JWT
   contents: read  # Required for actions/checkout
+  packages: read  # Required to download GitHub Packages
 
 jobs:
   deploy:
@@ -21,6 +22,8 @@ jobs:
 
       - name: Build Blog Site
         working-directory: blog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm ci
           npm run build
