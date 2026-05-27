@@ -60,7 +60,8 @@ class BlogStack < AWSCDK::Stack
       target: AWSCDK::AWSRoute53::RecordTarget.from_alias(
         AWSCDK::AWSRoute53Targets::CloudFrontTarget.new(distribution)
       ),
-      zone: zone
+      zone: zone,
+      delete_existing: true
     })
 
     # Deploy the static site (from Astro's 'dist' folder)
