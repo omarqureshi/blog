@@ -107,6 +107,7 @@ jobs:
             MODULE_NAME=$(echo "$GEM_NAME" | sed -r 's/(^|-)([a-z])/\U\2/g')
             jq ".jsii.targets.ruby = {\"gem\": \"$GEM_NAME\", \"module\": \"$MODULE_NAME\"}" package.json > tmp.json && mv tmp.json package.json
             jq ".version = \"${{ env.NPM_VERSION }}\" | .targets.ruby = {\"gem\": \"$GEM_NAME\", \"module\": \"$MODULE_NAME\"}" .jsii > tmp.jsii && mv tmp.jsii .jsii
+            if [ -f .jsii.gz ]; then gzip -c .jsii > .jsii.gz; fi
             rm -rf dist/ruby
             node $ROOT_DIR/../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
             cd dist/ruby
@@ -118,6 +119,7 @@ jobs:
           jq ".version = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           jq '.jsii.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' package.json > tmp.json && mv tmp.json package.json
           jq ".version = \"${{ env.NPM_VERSION }}\" | .targets.ruby = {\"gem\": \"aws-cdk-lib\", \"module\": \"AWSCDK\"}" .jsii > tmp.jsii && mv tmp.jsii .jsii
+          if [ -f .jsii.gz ]; then gzip -c .jsii > .jsii.gz; fi
           rm -rf dist/ruby
           grep '"version"' package.json
           grep '"version"' .jsii || echo "No version in .jsii!"
