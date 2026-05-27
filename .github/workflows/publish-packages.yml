@@ -102,25 +102,25 @@ jobs:
           npx lerna run build --scope aws-cdk-lib --include-dependencies
 
           # Publish nested dependencies
+          ROOT_DIR=$PWD
           for pkg in asset-awscli-v1 asset-node-proxy-agent-v6 cloud-assembly-schema; do
             echo "Publishing dependency: $pkg"
-            cd node_modules/@aws-cdk/$pkg
+            cd $ROOT_DIR/node_modules/@aws-cdk/$pkg
             jq ".version = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
             GEM_NAME="aws-cdk-$pkg"
             MODULE_NAME=$(echo "$GEM_NAME" | sed -r 's/(^|-)([a-z])/\U\2/g')
             jq ".jsii.targets.ruby = {\"gem\": \"$GEM_NAME\", \"module\": \"$MODULE_NAME\"}" package.json > tmp.json && mv tmp.json package.json
             jq ".targets.ruby = {\"gem\": \"$GEM_NAME\", \"module\": \"$MODULE_NAME\"}" .jsii > tmp.jsii && mv tmp.jsii .jsii
-            node ../../../../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
+            node $ROOT_DIR/../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
             cd dist/ruby
             gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
-            cd ../../../../
           done
 
           # Publish main lib
-          cd packages/aws-cdk-lib
+          cd $ROOT_DIR/packages/aws-cdk-lib
           jq ".version = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           jq '.jsii.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' package.json > tmp.json && mv tmp.json package.json
           jq '.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' .jsii > tmp.jsii && mv tmp.jsii .jsii
-          node ../../../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
+          node $ROOT_DIR/../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
           cd dist/ruby
           gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
