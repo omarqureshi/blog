@@ -103,8 +103,37 @@ jobs:
       - name: Link Local Gems
         working-directory: blog/infra
         run: |
-          sed -i "s/gem 'constructs'.*/gem 'constructs', path: '..\/..\/constructs\/dist\/ruby\/constructs'/" Gemfile
-          sed -i "s/gem 'aws-cdk-lib'.*/gem 'aws-cdk-lib', path: '..\/..\/aws-cdk\/packages\/aws-cdk-lib\/dist\/ruby\/aws-cdk-lib'/" Gemfile
+          echo "Constructs ruby dist:"
+          ls -la ../../constructs/dist/ruby || true
+          echo "AWS CDK Lib ruby dist:"
+          ls -la ../../aws-cdk/packages/aws-cdk-lib/dist/ruby || true
+          
+          # Find and unpack constructs gem if only .gem exists
+          CONSTRUCTS_DIR="../../constructs/dist/ruby"
+          if ls $CONSTRUCTS_DIR/*.gem 1> /dev/null 2>&1; then
+            echo "Unpacking constructs gem..."
+            gem unpack $CONSTRUCTS_DIR/*.gem --target $CONSTRUCTS_DIR/unpacked
+            CONSTRUCTS_PATH=$(ls -d $CONSTRUCTS_DIR/unpacked/*/ | head -n 1 | sed 's/\/$//')
+          else
+            CONSTRUCTS_PATH="$CONSTRUCTS_DIR/constructs"
+          fi
+          
+          # Find and unpack aws-cdk-lib gem if only .gem exists
+          CDK_DIR="../../aws-cdk/packages/aws-cdk-lib/dist/ruby"
+          if ls $CDK_DIR/*.gem 1> /dev/null 2>&1; then
+            echo "Unpacking aws-cdk-lib gem..."
+            gem unpack $CDK_DIR/*.gem --target $CDK_DIR/unpacked
+            CDK_PATH=$(ls -d $CDK_DIR/unpacked/*/ | head -n 1 | sed 's/\/$//')
+          else
+            CDK_PATH="$CDK_DIR/aws-cdk-lib"
+          fi
+          
+          # Escape paths for sed
+          CONSTRUCTS_SED_PATH=$(echo $CONSTRUCTS_PATH | sed 's/\//\\\//g')
+          CDK_SED_PATH=$(echo $CDK_PATH | sed 's/\//\\\//g')
+          
+          sed -i "s/gem 'constructs'.*/gem 'constructs', path: '${CONSTRUCTS_SED_PATH}'/" Gemfile
+          sed -i "s/gem 'aws-cdk-lib'.*/gem 'aws-cdk-lib', path: '${CDK_SED_PATH}'/" Gemfile
           bundle config set --local path 'vendor/bundle'
           bundle install
 
