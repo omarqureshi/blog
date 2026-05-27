@@ -49,18 +49,25 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: blog/infra
+
+      - name: Get JSII Commit SHA
+        id: jsii-commit
+        run: echo "sha=$(git -C jsii rev-parse HEAD)" >> $GITHUB_OUTPUT
 
       - name: Cache Build Artifacts
         id: cache-build
         uses: actions/cache@v4
         with:
           path: |
-            jsii/node_modules
-            constructs/node_modules
-            aws-cdk/node_modules
+            jsii/packages/@jsii/ruby-runtime
             constructs/dist/ruby
             aws-cdk/packages/aws-cdk-lib/dist/ruby
-          key: ${{ runner.os }}-cdk-ruby-build-${{ hashFiles('jsii/yarn.lock', 'constructs/yarn.lock', 'aws-cdk/yarn.lock') }}
+            aws-cdk/packages/@aws-cdk/asset-awscli-v1/dist/ruby
+            aws-cdk/packages/@aws-cdk/asset-node-proxy-agent-v6/dist/ruby
+            aws-cdk/packages/@aws-cdk/cloud-assembly-schema/dist/ruby
+          key: ${{ runner.os }}-cdk-ruby-build-${{ steps.jsii-commit.outputs.sha }}-${{ hashFiles('constructs/yarn.lock', 'aws-cdk/yarn.lock') }}
           restore-keys: |
             ${{ runner.os }}-cdk-ruby-build-
 
