@@ -62,6 +62,13 @@ jobs:
           echo "NPM_VERSION=0.0.0-$TIMESTAMP" >> $GITHUB_ENV
           echo "GEM_VERSION=0.0.0.pre.$TIMESTAMP" >> $GITHUB_ENV
 
+      - name: Build JSII
+        working-directory: jsii
+        run: |
+          corepack enable
+          yarn install
+          yarn build
+
       - name: Publish jsii-ruby-runtime (RubyGem)
         working-directory: jsii/packages/@jsii/ruby-runtime
         run: |
