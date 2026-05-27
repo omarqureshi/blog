@@ -95,6 +95,20 @@ jobs:
           corepack enable
           yarn install
           npx lerna run build --scope aws-cdk-lib --include-dependencies
+          
+          # Build nested dependencies
+          for pkg in asset-awscli-v1 asset-node-proxy-agent-v6 cloud-assembly-schema; do
+            echo "Building dependency: $pkg"
+            cd node_modules/@aws-cdk/$pkg
+            GEM_NAME="aws-cdk-$pkg"
+            MODULE_NAME=$(echo "$GEM_NAME" | sed -r 's/(^|-)([a-z])/\U\2/g')
+            jq ".jsii.targets.ruby = {\"gem\": \"$GEM_NAME\", \"module\": \"$MODULE_NAME\"}" package.json > package.json.tmp && mv package.json.tmp package.json
+            jq ".targets.ruby = {\"gem\": \"$GEM_NAME\", \"module\": \"$MODULE_NAME\"}" .jsii > .jsii.tmp && mv .jsii.tmp .jsii
+            node ../../../../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
+            cd ../../../
+          done
+          
+          # Build main lib
           cd packages/aws-cdk-lib
           jq '.jsii.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' package.json > package.json.tmp && mv package.json.tmp package.json
           jq '.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' .jsii > .jsii.tmp && mv .jsii.tmp .jsii
@@ -102,9 +116,9 @@ jobs:
 
       - name: Link Local Gems
         working-directory: blog/infra
+        env:
+          JSII_BASE_PATH: ../..
         run: |
-          sed -i "s/gem 'constructs'.*/gem 'constructs', path: '..\/..\/constructs\/dist\/ruby'/" Gemfile
-          sed -i "s/gem 'aws-cdk-lib'.*/gem 'aws-cdk-lib', path: '..\/..\/aws-cdk\/packages\/aws-cdk-lib\/dist\/ruby'/" Gemfile
           bundle config set --local path 'vendor/bundle'
           bundle install
 
@@ -119,4 +133,6 @@ jobs:
 
       - name: Deploy CDK Stack
         working-directory: blog/infra
+        env:
+          JSII_BASE_PATH: ../..
         run: bundle exec cdk deploy --require-approval never
