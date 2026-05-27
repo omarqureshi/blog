@@ -59,7 +59,7 @@ jobs:
         run: |
           TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
           echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
-          echo "NPM_VERSION=0.0.0-pre.$TIMESTAMP" >> $GITHUB_ENV
+          echo "NPM_VERSION=0.0.0-$TIMESTAMP" >> $GITHUB_ENV
           echo "GEM_VERSION=0.0.0.pre.$TIMESTAMP" >> $GITHUB_ENV
 
       - name: Publish jsii-ruby-runtime (RubyGem)
