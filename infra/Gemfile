@@ -1,10 +1,10 @@
 source 'https://rubygems.org'
 
 source "https://rubygems.pkg.github.com/omarqureshi" do
-  gem 'jsii-ruby-runtime', '>= 0.0.0.pre', '!= 0.0.0'
-  gem 'constructs', '>= 0.0.0.pre', '!= 0.0.0', require: false
-  gem 'aws-cdk-lib', '>= 0.0.0.pre', '!= 0.0.0', require: false
-  gem 'aws-cdk-asset-awscli-v1', '>= 0.0.0.pre', '!= 0.0.0', require: false
-  gem 'aws-cdk-asset-node-proxy-agent-v6', '>= 0.0.0.pre', '!= 0.0.0', require: false
-  gem 'aws-cdk-cloud-assembly-schema', '>= 0.0.0.pre', '!= 0.0.0', require: false
+  gem 'jsii-ruby-runtime', '>= 0.0.0.pre'
+  gem 'constructs', '>= 0.0.0.pre', require: false
+  gem 'aws-cdk-lib', '>= 0.0.0.pre', require: false
+  gem 'aws-cdk-asset-awscli-v1', '>= 0.0.0.pre', require: false
+  gem 'aws-cdk-asset-node-proxy-agent-v6', '>= 0.0.0.pre', require: false
+  gem 'aws-cdk-cloud-assembly-schema', '>= 0.0.0.pre', require: false
 end
