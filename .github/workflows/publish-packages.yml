@@ -95,6 +95,12 @@ jobs:
         run: |
           corepack enable
           yarn install
+          # Bypass other language builds
+          for f in $(find . -name package.json -not -path "*/node_modules/*"); do
+            if jq -e '.jsii.targets' "$f" >/dev/null 2>&1; then
+              jq 'del(.jsii.targets.java, .jsii.targets.python, .jsii.targets.dotnet, .jsii.targets.go)' "$f" > tmp.json && mv tmp.json "$f"
+            fi
+          done
           npx lerna run build --scope aws-cdk-lib --include-dependencies
 
           # Publish nested dependencies
@@ -119,6 +125,10 @@ jobs:
           jq '.jsii.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' package.json > tmp.json && mv tmp.json package.json
           jq ".version = \"${{ env.NPM_VERSION }}\" | .targets.ruby = {\"gem\": \"aws-cdk-lib\", \"module\": \"AWSCDK\"}" .jsii > tmp.jsii && mv tmp.jsii .jsii
           rm -rf dist/ruby
+          grep '"version"' package.json
+          grep '"version"' .jsii || echo "No version in .jsii!"
           node $ROOT_DIR/../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
           cd dist/ruby
+          ls -la
+          gem spec *.gem
           gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
