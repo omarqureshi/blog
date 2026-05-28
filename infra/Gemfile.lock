@@ -1,0 +1,42 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+
+GEM
+  remote: https://rubygems.pkg.github.com/omarqureshi/
+  specs:
+    aws-cdk-asset-awscli-v1 (2.2.273)
+      jsii-ruby-runtime (< 0.0.1)
+    aws-cdk-asset-node-proxy-agent-v6 (0.0.0.pre.20260528005655)
+      jsii-ruby-runtime (< 0.0.1)
+    aws-cdk-cloud-assembly-schema (0.0.0.pre.20260528005655)
+      jsii-ruby-runtime (< 0.0.1)
+    aws-cdk-lib (0.0.0.pre.20260528005655)
+      jsii-ruby-runtime (< 0.0.1)
+    constructs (0.0.0)
+      jsii-ruby-runtime (< 0.0.1)
+    jsii-ruby-runtime (0.0.0.pre.20260528005655)
+
+PLATFORMS
+  ruby
+  x86_64-linux-gnu
+
+DEPENDENCIES
+  aws-cdk-asset-awscli-v1 (>= 0.0.0.pre)!
+  aws-cdk-asset-node-proxy-agent-v6 (>= 0.0.0.pre)!
+  aws-cdk-cloud-assembly-schema (>= 0.0.0.pre)!
+  aws-cdk-lib (>= 0.0.0.pre)!
+  constructs (>= 0.0.0.pre)!
+  jsii-ruby-runtime (>= 0.0.0.pre)!
+
+CHECKSUMS
+  aws-cdk-asset-awscli-v1 (2.2.273) sha256=443b35ed9daba4f6eba7f0d9c8d180acdee63228ec07168c53159fb953151d67
+  aws-cdk-asset-node-proxy-agent-v6 (0.0.0.pre.20260528005655) sha256=a998eb6ef1535f70c218aa1c60383d9ab7b31c8ba64a80470de4ad5f9905dbf0
+  aws-cdk-cloud-assembly-schema (0.0.0.pre.20260528005655) sha256=dfda855b773250d60643302147db2fe7598e8e28bb8dbaeb10f6ff2094a55b59
+  aws-cdk-lib (0.0.0.pre.20260528005655) sha256=2f9ac02cbfe43634b3021a3c79787b8cd0a0ab15bdc74a89c79ab9238089c1d5
+  bundler (4.0.11) sha256=5bcec0fb78302e48d02ee46f10ee6e6942be647ba5b44a6d1ddfda9a240ce785
+  constructs (0.0.0) sha256=adc36c7ecb6f2db59224cffd5eb5ac328e98e5685e555a82b332e95c5d53bf82
+  jsii-ruby-runtime (0.0.0.pre.20260528005655) sha256=51fb10822180e1b667b1876f36442062edc65b883efed975f32c58cdf42935bc
+
+BUNDLED WITH
+  4.0.11
