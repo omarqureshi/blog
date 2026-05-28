@@ -152,7 +152,7 @@ class BlogStack < AWSCDK::Stack
     # Cognito User Pool for Admin Access
     user_pool = AWSCDK::AWSCognito::UserPool.new(self, 'AdminUserPool', {
       user_pool_name: 'BlogAdminPool',
-      self_signup_enabled: false,
+      self_sign_up_enabled: false,
       sign_in_aliases: { email: true },
       auto_verify: { email: true },
       password_policy: {
