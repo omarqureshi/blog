@@ -1,98 +1,116 @@
 require 'json'
-require 'aws-sdk-athena'
-require 'aws-sdk-s3'
+require 'aws-sdk-dynamodb'
 require 'time'
+require 'securerandom'
+require 'digest'
 
 def handler(event:, context:)
-  athena = Aws::Athena::Client.new
-  s3 = Aws::S3::Client.new
+  dynamodb = Aws::DynamoDB::Client.new
+  table_name = ENV['TABLE_NAME']
 
-  cache_bucket = ENV['CACHE_BUCKET']
-  cache_key = ENV['CACHE_KEY']
-  athena_output_bucket = ENV['ATHENA_OUTPUT_BUCKET']
-  athena_database = ENV['ATHENA_DATABASE']
+  method = event['httpMethod']
+  path = event['resource']
 
-  # 1. Check Cache
-  begin
-    cache_obj = s3.get_object(bucket: cache_bucket, key: cache_key)
-    last_modified = cache_obj.last_modified
-    age_in_minutes = (Time.now.utc - last_modified) / 60.0
-
-    if age_in_minutes < 60
-      return {
-        statusCode: 200,
-        headers: { "Access-Control-Allow-Origin" => "*", "Content-Type" => "application/json" },
-        body: cache_obj.body.read
-      }
-    end
-  rescue Aws::S3::Errors::NoSuchKey
-    # Cache miss
-    puts "Cache miss or stale"
-  rescue StandardError => e
-    puts "Cache error: #{e.message}"
-  end
-
-  # 2. Start Athena Query
-  query_str = <<~SQL
-    SELECT cs_uri_stem, count(*) as views 
-    FROM cloudfront_logs 
-    WHERE sc_status = 200 AND cs_uri_stem LIKE '/%' AND cs_uri_stem NOT LIKE '/_astro/%'
-    GROUP BY cs_uri_stem 
-    ORDER BY views DESC 
-    LIMIT 10
-  SQL
-
-  start_res = athena.start_query_execution({
-    query_string: query_str,
-    query_execution_context: { database: athena_database },
-    result_configuration: { output_location: athena_output_bucket }
-  })
-
-  execution_id = start_res.query_execution_id
-
-  # 3. Poll for completion
-  status = 'RUNNING'
-  while ['RUNNING', 'QUEUED'].include?(status)
-    sleep(1)
-    status_res = athena.get_query_execution({ query_execution_id: execution_id })
-    status = status_res.query_execution.status.state
-    if ['FAILED', 'CANCELLED'].include?(status)
-      raise "Athena query failed: #{status_res.query_execution.status.state_change_reason}"
-    end
-  end
-
-  # 4. Fetch Results
-  results_res = athena.get_query_results({ query_execution_id: execution_id })
-  
-  # Parse Athena Results (skip header row)
-  rows = results_res.result_set.rows[1..] || []
-  data = rows.map do |row|
-    {
-      path: row.data[0].var_char_value,
-      views: row.data[1].var_char_value.to_i
-    }
-  end
-
-  response_body = data.to_json
-
-  # 5. Update Cache
-  s3.put_object({
-    bucket: cache_bucket,
-    key: cache_key,
-    body: response_body,
-    content_type: "application/json"
-  })
-
-  {
-    statusCode: 200,
-    headers: { "Access-Control-Allow-Origin" => "*", "Content-Type" => "application/json" },
-    body: response_body
+  # Enable CORS for responses
+  headers = {
+    "Access-Control-Allow-Origin" => "*",
+    "Content-Type" => "application/json"
   }
+
+  if method == 'POST' && path == '/api/track'
+    return handle_track(event, dynamodb, table_name, headers)
+  elsif method == 'GET' && path == '/api/analytics'
+    return handle_analytics(event, dynamodb, table_name, headers)
+  else
+    return { statusCode: 404, headers: headers, body: 'Not Found' }
+  end
 rescue StandardError => e
   puts "Error: #{e.message}"
-  {
-    statusCode: 500,
-    headers: { "Access-Control-Allow-Origin" => "*" },
-    body: { error: e.message }.to_json
+  puts e.backtrace.join("\n")
+  { statusCode: 500, headers: headers, body: { error: 'Internal Server Error' }.to_json }
+end
+
+def handle_track(event, dynamodb, table_name, headers)
+  body = JSON.parse(event['body'] || '{}')
+  req_headers = event['headers'] || {}
+  
+  # Extract Data
+  path = body['path'] || '/'
+  referrer = body['referrer'] || 'direct'
+  user_agent = body['userAgent'] || req_headers['User-Agent'] || 'unknown'
+  
+  # CloudFront Geolocation Headers
+  country = req_headers['CloudFront-Viewer-Country'] || req_headers['cloudfront-viewer-country'] || 'Unknown'
+  city = req_headers['CloudFront-Viewer-City'] || req_headers['cloudfront-viewer-city'] || 'Unknown'
+  
+  # IP from API Gateway
+  ip = event.dig('requestContext', 'identity', 'sourceIp') || '0.0.0.0'
+  
+  # Cookieless Tracking: Hash IP + UserAgent + Date
+  date_str = Time.now.utc.strftime('%Y-%m-%d')
+  visitor_id = Digest::SHA256.hexdigest("#{ip}-#{user_agent}-#{date_str}")[0..15]
+  
+  timestamp = Time.now.utc.iso8601
+  
+  item = {
+    'pk' => "PAGEVIEW##{date_str}",
+    'sk' => "#{timestamp}##{SecureRandom.uuid}",
+    'path' => path,
+    'referrer' => referrer,
+    'country' => country,
+    'city' => city,
+    'visitor_id' => visitor_id
   }
+
+  dynamodb.put_item({
+    table_name: table_name,
+    item: item
+  })
+
+  { statusCode: 200, headers: headers, body: { success: true }.to_json }
+end
+
+def handle_analytics(event, dynamodb, table_name, headers)
+  # Query the last 7 days of data (for simplicity)
+  today = Time.now.utc
+  dates = (0..6).map { |i| (today - (i * 86400)).strftime('%Y-%m-%d') }
+  
+  all_items = []
+  
+  dates.each do |date_str|
+    res = dynamodb.query({
+      table_name: table_name,
+      key_condition_expression: "pk = :pk",
+      expression_attribute_values: {
+        ":pk" => "PAGEVIEW##{date_str}"
+      }
+    })
+    all_items.concat(res.items)
+  end
+
+  # Aggregations
+  total_views = all_items.size
+  unique_visitors = all_items.map { |i| i['visitor_id'] }.uniq.size
+  
+  # Top Pages
+  paths = all_items.map { |i| i['path'] }.tally
+  top_pages = paths.sort_by { |_, count| -count }.take(10).map { |p, c| { path: p, views: c } }
+  
+  # Top Referrers
+  referrers = all_items.map { |i| i['referrer'] }.tally
+  top_referrers = referrers.sort_by { |_, count| -count }.take(10).map { |r, c| { referrer: r, views: c } }
+  
+  # Top Countries
+  countries = all_items.map { |i| i['country'] }.tally
+  top_countries = countries.sort_by { |_, count| -count }.take(10).map { |c, count| { country: c, views: count } }
+
+  response_data = {
+    total_views: total_views,
+    unique_visitors: unique_visitors,
+    top_pages: top_pages,
+    top_referrers: top_referrers,
+    top_countries: top_countries
+  }
+
+  { statusCode: 200, headers: headers, body: response_data.to_json }
 end

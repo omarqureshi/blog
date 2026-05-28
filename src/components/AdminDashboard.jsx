@@ -145,23 +145,54 @@ export default function AdminDashboard() {
         <button onClick={handleLogout} style={{ padding: '5px 10px' }}>Logout</button>
       </div>
 
-      {loading && <p>Loading data from Athena...</p>}
+      {loading && <p>Loading real-time analytics...</p>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
       
-      {data && data.length > 0 && (
-        <div style={{ height: '400px', marginTop: '40px' }}>
-          <h3>Top Visited Pages</h3>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data}>
-              <XAxis dataKey="path" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="views" fill="#8884d8" />
-            </BarChart>
-          </ResponsiveContainer>
+      {data && (
+        <div style={{ marginTop: '20px' }}>
+          <div style={{ display: 'flex', gap: '20px', marginBottom: '40px' }}>
+            <div style={{ padding: '20px', background: '#f5f5f5', borderRadius: '8px', flex: 1 }}>
+              <h3 style={{ margin: 0 }}>Total Pageviews</h3>
+              <p style={{ fontSize: '2em', margin: '10px 0 0' }}>{data.total_views}</p>
+            </div>
+            <div style={{ padding: '20px', background: '#f5f5f5', borderRadius: '8px', flex: 1 }}>
+              <h3 style={{ margin: 0 }}>Unique Visitors (7d)</h3>
+              <p style={{ fontSize: '2em', margin: '10px 0 0' }}>{data.unique_visitors}</p>
+            </div>
+          </div>
+
+          <div style={{ height: '300px', marginBottom: '40px' }}>
+            <h3>Top Pages</h3>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data.top_pages} layout="vertical" margin={{ left: 50 }}>
+                <XAxis type="number" />
+                <YAxis dataKey="path" type="category" width={100} />
+                <Tooltip />
+                <Bar dataKey="views" fill="#8884d8" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div style={{ display: 'flex', gap: '40px' }}>
+            <div style={{ flex: 1 }}>
+              <h3>Top Referrers</h3>
+              <ul style={{ paddingLeft: '20px' }}>
+                {data.top_referrers.map((r, i) => (
+                  <li key={i}>{r.referrer} ({r.views} views)</li>
+                ))}
+              </ul>
+            </div>
+            <div style={{ flex: 1 }}>
+              <h3>Top Countries</h3>
+              <ul style={{ paddingLeft: '20px' }}>
+                {data.top_countries.map((c, i) => (
+                  <li key={i}>{c.country} ({c.views} views)</li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </div>
       )}
-      {data && data.length === 0 && <p>No data found in the logs yet.</p>}
     </div>
   );
 }

@@ -23,7 +23,7 @@ class BlogStack < AWSCDK::Stack
         ignore_public_acls: false,
         restrict_public_buckets: false
       ),
-      removal_policy: AWSCDK::RemovalPolicy::DESTROY, # NOT recommended for prod, but okay for this example
+      removal_policy: AWSCDK::RemovalPolicy::DESTROY,
       auto_delete_objects: true
     })
 
@@ -41,13 +41,100 @@ class BlogStack < AWSCDK::Stack
       object_ownership: AWSCDK::AWSS3::ObjectOwnership::OBJECT_WRITER
     })
 
-    # Create the CloudFront Distribution with Logging
+    # --- NEW ANALYTICS INFRASTRUCTURE ---
+    
+    # DynamoDB Table for Analytics
+    analytics_table = AWSCDK::AWSDynamoDB::Table.new(self, 'BlogAnalytics', {
+      partition_key: { name: 'pk', type: AWSCDK::AWSDynamoDB::AttributeType::STRING },
+      sort_key: { name: 'sk', type: AWSCDK::AWSDynamoDB::AttributeType::STRING },
+      billing_mode: AWSCDK::AWSDynamoDB::BillingMode::PAY_PER_REQUEST,
+      removal_policy: AWSCDK::RemovalPolicy::DESTROY # Safe to destroy for blog
+    })
+
+    # Lambda Function for Analytics API
+    analytics_lambda = AWSCDK::AWSLambda::Function.new(self, 'AnalyticsLambda', {
+      runtime: AWSCDK::AWSLambda::Runtime.RUBY_3_2,
+      handler: 'analytics.handler',
+      code: AWSCDK::AWSLambda::Code.from_asset('lambda'),
+      timeout: AWSCDK::Duration.seconds(10),
+      memory_size: 256,
+      environment: {
+        'TABLE_NAME' => analytics_table.table_name
+      }
+    })
+    
+    analytics_table.grant_read_write_data(analytics_lambda)
+
+    # API Gateway
+    api = AWSCDK::AWSApigateway::RestApi.new(self, 'AnalyticsApi', {
+      rest_api_name: 'Blog Analytics API',
+      default_cors_preflight_options: {
+        allow_origins: AWSCDK::AWSApigateway::Cors.ALL_ORIGINS,
+        allow_methods: AWSCDK::AWSApigateway::Cors.ALL_METHODS
+      }
+    })
+
+    # Cognito User Pool for Admin Access
+    user_pool = AWSCDK::AWSCognito::UserPool.new(self, 'AdminUserPool', {
+      user_pool_name: 'BlogAdminPool',
+      self_sign_up_enabled: false,
+      sign_in_aliases: { email: true },
+      auto_verify: { email: true },
+      password_policy: {
+        min_length: 8,
+        require_lowercase: true,
+        require_uppercase: true,
+        require_digits: true,
+        require_symbols: false
+      }
+    })
+
+    user_pool_client = user_pool.add_client('AdminWebClient', {
+      generate_secret: false,
+      auth_flows: { user_password: true, user_srp: true }
+    })
+
+    authorizer = AWSCDK::AWSApigateway::CognitoUserPoolsAuthorizer.new(self, 'AdminAuthorizer', {
+      cognito_user_pools: [user_pool]
+    })
+
+    # API Endpoints
+    api_resource = api.root.add_resource('api')
+    
+    # POST /api/track (Public Tracking Endpoint)
+    track_resource = api_resource.add_resource('track')
+    track_resource.add_method('POST', AWSCDK::AWSApigateway::LambdaIntegration.new(analytics_lambda))
+
+    # GET /api/analytics (Protected Dashboard Endpoint)
+    analytics_resource = api_resource.add_resource('analytics')
+    analytics_resource.add_method('GET', AWSCDK::AWSApigateway::LambdaIntegration.new(analytics_lambda), {
+      authorizer: authorizer,
+      authorization_type: AWSCDK::AWSApigateway::AuthorizationType::COGNITO
+    })
+
+    # Create the CloudFront Distribution with Logging and API Routing
     distribution = AWSCDK::AWSCloudfront::CloudFrontWebDistribution.new(self, 'SiteDistribution', {
       logging_config: {
         bucket: logs_bucket,
         include_cookies: false
       },
       origin_configs: [
+        AWSCDK::AWSCloudfront::SourceConfiguration.new(
+          custom_origin_source: AWSCDK::AWSCloudfront::CustomOriginConfig.new(
+            domain_name: "#{api.rest_api_id}.execute-api.#{self.region}.amazonaws.com",
+            origin_path: "/prod",
+            origin_protocol_policy: AWSCDK::AWSCloudfront::OriginProtocolPolicy::HTTPS_ONLY
+          ),
+          behaviors: [
+            AWSCDK::AWSCloudfront::Behavior.new(
+              path_pattern: '/api/*',
+              forwarded_values: AWSCDK::AWSCloudfront::CfnDistribution::ForwardedValuesProperty.new(
+                query_string: true,
+                headers: ['CloudFront-Viewer-Country', 'CloudFront-Viewer-City']
+              )
+            )
+          ]
+        ),
         AWSCDK::AWSCloudfront::SourceConfiguration.new(
           custom_origin_source: AWSCDK::AWSCloudfront::CustomOriginConfig.new(
             domain_name: site_bucket.bucket_website_domain_name,
@@ -76,7 +163,7 @@ class BlogStack < AWSCDK::Stack
       delete_existing: true
     })
 
-    # Deploy the static site (from Astro's 'dist' folder)
+    # Deploy the static site
     AWSCDK::AWSS3Deployment::BucketDeployment.new(self, 'DeployWithInvalidation', {
       sources: [AWSCDK::AWSS3Deployment::Source.asset('../dist')],
       destination_bucket: site_bucket,
@@ -89,132 +176,6 @@ class BlogStack < AWSCDK::Stack
       record_names: ["www.#{domain_name}"],
       target_domain: domain_name,
       zone: zone,
-    })
-
-    # --- ANALYTICS INFRASTRUCTURE ---
-
-    # S3 Bucket for Athena Query Results & Cache
-    athena_bucket = AWSCDK::AWSS3::Bucket.new(self, 'AthenaResultsBucket', {
-      removal_policy: AWSCDK::RemovalPolicy::DESTROY,
-      auto_delete_objects: true,
-      block_public_access: AWSCDK::AWSS3::BlockPublicAccess.BLOCK_ALL
-    })
-
-    # Saved Query to Create Athena Table
-    create_table_sql = <<~SQL
-      CREATE EXTERNAL TABLE IF NOT EXISTS default.cloudfront_logs (
-        `date` DATE,
-        time STRING,
-        x_edge_location STRING,
-        sc_bytes BIGINT,
-        c_ip STRING,
-        cs_method STRING,
-        cs_host STRING,
-        cs_uri_stem STRING,
-        sc_status INT,
-        cs_referer STRING,
-        cs_user_agent STRING,
-        cs_uri_query STRING,
-        cs_cookie STRING,
-        x_edge_result_type STRING,
-        x_edge_request_id STRING,
-        x_host_header STRING,
-        cs_protocol STRING,
-        cs_bytes BIGINT,
-        time_taken FLOAT,
-        x_forwarded_for STRING,
-        ssl_protocol STRING,
-        ssl_cipher STRING,
-        x_edge_response_result_type STRING,
-        cs_protocol_version STRING,
-        fle_status STRING,
-        fle_encrypted_fields INT,
-        c_port INT,
-        time_to_first_byte FLOAT,
-        x_edge_detailed_result_type STRING,
-        sc_content_type STRING,
-        sc_content_len BIGINT,
-        sc_range_start BIGINT,
-        sc_range_end BIGINT
-      )
-      ROW FORMAT DELIMITED
-      FIELDS TERMINATED BY '\\t'
-      LOCATION 's3://#{logs_bucket.bucket_name}/'
-      TBLPROPERTIES ('skip.header.line.count'='2');
-    SQL
-
-    AWSCDK::AWSAthena::CfnNamedQuery.new(self, 'CreateCloudFrontLogsTableQuery', {
-      database: 'default',
-      name: 'Create CloudFront Logs Table',
-      query_string: create_table_sql
-    })
-
-    # Cognito User Pool for Admin Access
-    user_pool = AWSCDK::AWSCognito::UserPool.new(self, 'AdminUserPool', {
-      user_pool_name: 'BlogAdminPool',
-      self_sign_up_enabled: false,
-      sign_in_aliases: { email: true },
-      auto_verify: { email: true },
-      password_policy: {
-        min_length: 8,
-        require_lowercase: true,
-        require_uppercase: true,
-        require_digits: true,
-        require_symbols: false
-      }
-    })
-
-    user_pool_client = user_pool.add_client('AdminWebClient', {
-      generate_secret: false,
-      auth_flows: { user_password: true, user_srp: true }
-    })
-
-    # Lambda Function for Analytics API
-    analytics_lambda = AWSCDK::AWSLambda::Function.new(self, 'AnalyticsLambda', {
-      runtime: AWSCDK::AWSLambda::Runtime.RUBY_3_2,
-      handler: 'analytics.handler',
-      code: AWSCDK::AWSLambda::Code.from_asset('lambda'),
-      timeout: AWSCDK::Duration.seconds(30),
-      memory_size: 256,
-      environment: {
-        'ATHENA_OUTPUT_BUCKET' => "s3://#{athena_bucket.bucket_name}/",
-        'ATHENA_DATABASE' => 'default',
-        'CACHE_BUCKET' => athena_bucket.bucket_name,
-        'CACHE_KEY' => 'cache/analytics_cache.json'
-      }
-    })
-
-    # Grant Lambda permissions to query Athena and access S3
-    analytics_lambda.add_to_role_policy(AWSCDK::AWSIAM::PolicyStatement.new(
-      actions: ['athena:StartQueryExecution', 'athena:GetQueryExecution', 'athena:GetQueryResults'],
-      resources: ['*']
-    ))
-    analytics_lambda.add_to_role_policy(AWSCDK::AWSIAM::PolicyStatement.new(
-      actions: ['glue:GetTable', 'glue:GetDatabase', 'glue:GetPartitions'],
-      resources: ['*']
-    ))
-    logs_bucket.grant_read(analytics_lambda)
-    athena_bucket.grant_read_write(analytics_lambda)
-
-    # API Gateway
-    api = AWSCDK::AWSApigateway::RestApi.new(self, 'AnalyticsApi', {
-      rest_api_name: 'Blog Analytics API',
-      default_cors_preflight_options: {
-        allow_origins: AWSCDK::AWSApigateway::Cors.ALL_ORIGINS,
-        allow_methods: AWSCDK::AWSApigateway::Cors.ALL_METHODS
-      }
-    })
-
-    # Cognito Authorizer
-    authorizer = AWSCDK::AWSApigateway::CognitoUserPoolsAuthorizer.new(self, 'AdminAuthorizer', {
-      cognito_user_pools: [user_pool]
-    })
-
-    # API Endpoint
-    analytics_resource = api.root.add_resource('analytics')
-    analytics_resource.add_method('GET', AWSCDK::AWSApigateway::LambdaIntegration.new(analytics_lambda), {
-      authorizer: authorizer,
-      authorization_type: AWSCDK::AWSApigateway::AuthorizationType::COGNITO
     })
 
     # Outputs

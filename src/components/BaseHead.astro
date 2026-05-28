@@ -56,3 +56,23 @@ const { title, description, image = FallbackImage } = Astro.props;
 <meta property="twitter:title" content={title} />
 <meta property="twitter:description" content={description} />
 <meta property="twitter:image" content={new URL(image.src, Astro.url)} />
+
+<!-- Custom Analytics Tracker -->
+<script>
+  if (typeof window !== 'undefined') {
+    if (!window.location.pathname.startsWith('/admin')) {
+      const payload = {
+        path: window.location.pathname,
+        referrer: document.referrer || 'direct',
+        userAgent: navigator.userAgent
+      };
+      
+      fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        keepalive: true
+      }).catch(() => {}); // Silently fail if blocked by ad-blocker
+    }
+  }
+</script>
