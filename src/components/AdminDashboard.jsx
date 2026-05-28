@@ -118,20 +118,20 @@ export default function AdminDashboard() {
 
   if (!session) {
     return (
-      <div style={{ maxWidth: '400px', margin: '100px auto', fontFamily: 'sans-serif' }}>
+      <div style={{ maxWidth: '400px', margin: '100px auto' }}>
         <h2>Admin Login</h2>
         {error && <p style={{ color: 'red' }}>{error}</p>}
         {requireNewPassword ? (
-          <form onSubmit={handleNewPassword} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <form onSubmit={handleNewPassword} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             <p>You must change your temporary password.</p>
-            <input type="password" placeholder="New Password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required />
-            <button type="submit" style={{ padding: '10px', background: '#333', color: '#fff' }}>Set Password</button>
+            <input type="password" placeholder="New Password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required style={{ padding: '10px', background: 'var(--header-bg)', color: 'inherit', border: '1px solid rgb(var(--gray-light))', borderRadius: '4px' }} />
+            <button type="submit" style={{ padding: '10px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Set Password</button>
           </form>
         ) : (
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />
-            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
-            <button type="submit" style={{ padding: '10px', background: '#333', color: '#fff' }}>Login</button>
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required style={{ padding: '10px', background: 'var(--header-bg)', color: 'inherit', border: '1px solid rgb(var(--gray-light))', borderRadius: '4px' }} />
+            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required style={{ padding: '10px', background: 'var(--header-bg)', color: 'inherit', border: '1px solid rgb(var(--gray-light))', borderRadius: '4px' }} />
+            <button type="submit" style={{ padding: '10px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Login</button>
           </form>
         )}
       </div>
@@ -139,10 +139,10 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div style={{ padding: '40px', fontFamily: 'sans-serif', maxWidth: '800px', margin: '0 auto' }}>
+    <div style={{ padding: '40px', maxWidth: '800px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1>Analytics Dashboard</h1>
-        <button onClick={handleLogout} style={{ padding: '5px 10px' }}>Logout</button>
+        <h1 style={{ color: 'rgb(var(--black))' }}>Analytics Dashboard</h1>
+        <button onClick={handleLogout} style={{ padding: '8px 16px', background: 'var(--header-bg)', color: 'inherit', border: '1px solid rgb(var(--gray-light))', borderRadius: '4px', cursor: 'pointer' }}>Logout</button>
       </div>
 
       {loading && <p>Loading real-time analytics...</p>}
@@ -151,13 +151,13 @@ export default function AdminDashboard() {
       {data && (
         <div style={{ marginTop: '20px' }}>
           <div style={{ display: 'flex', gap: '20px', marginBottom: '40px' }}>
-            <div style={{ padding: '20px', background: '#f5f5f5', borderRadius: '8px', flex: 1 }}>
-              <h3 style={{ margin: 0 }}>Total Pageviews</h3>
-              <p style={{ fontSize: '2em', margin: '10px 0 0' }}>{data.total_views}</p>
+            <div style={{ padding: '20px', background: 'var(--header-bg)', borderRadius: '8px', flex: 1, border: '1px solid rgb(var(--gray-light))' }}>
+              <h3 style={{ margin: 0, color: 'var(--accent)' }}>Total Pageviews</h3>
+              <p style={{ fontSize: '2.5em', margin: '10px 0 0', fontWeight: 'bold', color: 'rgb(var(--black))' }}>{data.total_views}</p>
             </div>
-            <div style={{ padding: '20px', background: '#f5f5f5', borderRadius: '8px', flex: 1 }}>
-              <h3 style={{ margin: 0 }}>Unique Visitors (7d)</h3>
-              <p style={{ fontSize: '2em', margin: '10px 0 0' }}>{data.unique_visitors}</p>
+            <div style={{ padding: '20px', background: 'var(--header-bg)', borderRadius: '8px', flex: 1, border: '1px solid rgb(var(--gray-light))' }}>
+              <h3 style={{ margin: 0, color: 'var(--accent)' }}>Unique Visitors (7d)</h3>
+              <p style={{ fontSize: '2.5em', margin: '10px 0 0', fontWeight: 'bold', color: 'rgb(var(--black))' }}>{data.unique_visitors}</p>
             </div>
           </div>
 
