@@ -197,7 +197,7 @@ class BlogStack < AWSCDK::Stack
     athena_bucket.grant_read_write(analytics_lambda)
 
     # API Gateway
-    api = AWSCDK::AWSApiGateway::RestApi.new(self, 'AnalyticsApi', {
+    api = AWSCDK::AWSApigateway::RestApi.new(self, 'AnalyticsApi', {
       rest_api_name: 'Blog Analytics API',
       default_cors_preflight_options: {
         allow_origins: AWSCDK::AWSApiGateway::Cors::ALL_ORIGINS,
