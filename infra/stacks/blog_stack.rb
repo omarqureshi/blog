@@ -89,7 +89,6 @@ class BlogStack < AWSCDK::Stack
       record_names: ["www.#{domain_name}"],
       target_domain: domain_name,
       zone: zone,
-      delete_existing: true
     })
 
     # --- ANALYTICS INFRASTRUCTURE ---
