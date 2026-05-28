@@ -44,10 +44,10 @@ class BlogStack < AWSCDK::Stack
     # --- NEW ANALYTICS INFRASTRUCTURE ---
     
     # DynamoDB Table for Analytics
-    analytics_table = AWSCDK::AWSDynamoDB::Table.new(self, 'BlogAnalytics', {
-      partition_key: { name: 'pk', type: AWSCDK::AWSDynamoDB::AttributeType::STRING },
-      sort_key: { name: 'sk', type: AWSCDK::AWSDynamoDB::AttributeType::STRING },
-      billing_mode: AWSCDK::AWSDynamoDB::BillingMode::PAY_PER_REQUEST,
+    analytics_table = AWSCDK::AWSDynamodb::Table.new(self, 'BlogAnalytics', {
+      partition_key: { name: 'pk', type: AWSCDK::AWSDynamodb::AttributeType::STRING },
+      sort_key: { name: 'sk', type: AWSCDK::AWSDynamodb::AttributeType::STRING },
+      billing_mode: AWSCDK::AWSDynamodb::BillingMode::PAY_PER_REQUEST,
       removal_policy: AWSCDK::RemovalPolicy::DESTROY # Safe to destroy for blog
     })
 
