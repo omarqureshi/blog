@@ -1,6 +1,36 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    ast (2.4.3)
+    json (2.19.7)
+    language_server-protocol (3.17.0.5)
+    lint_roller (1.1.0)
+    parallel (1.28.0)
+    parser (3.3.11.1)
+      ast (~> 2.4.1)
+      racc
+    prism (1.9.0)
+    racc (1.8.1)
+    rainbow (3.1.1)
+    regexp_parser (2.12.0)
+    rubocop (1.86.2)
+      json (~> 2.3)
+      language_server-protocol (~> 3.17.0.2)
+      lint_roller (~> 1.1.0)
+      parallel (>= 1.10)
+      parser (>= 3.3.0.2)
+      rainbow (>= 2.2.2, < 4.0)
+      regexp_parser (>= 2.9.3, < 3.0)
+      rubocop-ast (>= 1.49.0, < 2.0)
+      ruby-progressbar (~> 1.7)
+      unicode-display_width (>= 2.4.0, < 4.0)
+    rubocop-ast (1.49.1)
+      parser (>= 3.3.7.2)
+      prism (~> 1.7)
+    ruby-progressbar (1.13.0)
+    unicode-display_width (3.2.0)
+      unicode-emoji (~> 4.1)
+    unicode-emoji (4.2.0)
 
 GEM
   remote: https://rubygems.pkg.github.com/omarqureshi/
@@ -28,8 +58,10 @@ DEPENDENCIES
   aws-cdk-lib (>= 0.0.0.pre)!
   constructs (>= 0.0.0.pre)!
   jsii-ruby-runtime (>= 0.0.0.pre)!
+  rubocop
 
 CHECKSUMS
+  ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   aws-cdk-asset-awscli-v1 (2.2.273) sha256=443b35ed9daba4f6eba7f0d9c8d180acdee63228ec07168c53159fb953151d67
   aws-cdk-asset-node-proxy-agent-v6 (0.0.0.pre.20260528005655) sha256=a998eb6ef1535f70c218aa1c60383d9ab7b31c8ba64a80470de4ad5f9905dbf0
   aws-cdk-cloud-assembly-schema (0.0.0.pre.20260528005655) sha256=dfda855b773250d60643302147db2fe7598e8e28bb8dbaeb10f6ff2094a55b59
@@ -37,6 +69,20 @@ CHECKSUMS
   bundler (4.0.11) sha256=5bcec0fb78302e48d02ee46f10ee6e6942be647ba5b44a6d1ddfda9a240ce785
   constructs (0.0.0) sha256=adc36c7ecb6f2db59224cffd5eb5ac328e98e5685e555a82b332e95c5d53bf82
   jsii-ruby-runtime (0.0.0.pre.20260528005655) sha256=51fb10822180e1b667b1876f36442062edc65b883efed975f32c58cdf42935bc
+  json (2.19.7) sha256=fe432c8639f6efff69f9d73b518a3705d9581ab93156f981ea72806e1e5bcc3e
+  language_server-protocol (3.17.0.5) sha256=fd1e39a51a28bf3eec959379985a72e296e9f9acfce46f6a79d31ca8760803cc
+  lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
+  parallel (1.28.0) sha256=33e6de1484baf2524792d178b0913fc8eb94c628d6cfe45599ad4458c638c970
+  parser (3.3.11.1) sha256=d17ace7aabe3e72c3cc94043714be27cc6f852f104d81aa284c2281aecc65d54
+  prism (1.9.0) sha256=7b530c6a9f92c24300014919c9dcbc055bf4cdf51ec30aed099b06cd6674ef85
+  racc (1.8.1) sha256=4a7f6929691dbec8b5209a0b373bc2614882b55fc5d2e447a21aaa691303d62f
+  rainbow (3.1.1) sha256=039491aa3a89f42efa1d6dec2fc4e62ede96eb6acd95e52f1ad581182b79bc6a
+  regexp_parser (2.12.0) sha256=35a916a1d63190ab5c9009457136ae5f3c0c7512d60291d0d1378ba18ce08ebb
+  rubocop (1.86.2) sha256=bb2e97f635eda42c448f2588f4a6ff78f221b8bdfdf65b1e9b07fbd57521b45d
+  rubocop-ast (1.49.1) sha256=4412f3ee70f6fe4546cc489548e0f6fcf76cafcfa80fa03af67098ffed755035
+  ruby-progressbar (1.13.0) sha256=80fc9c47a9b640d6834e0dc7b3c94c9df37f08cb072b7761e4a71e22cff29b33
+  unicode-display_width (3.2.0) sha256=0cdd96b5681a5949cdbc2c55e7b420facae74c4aaf9a9815eee1087cb1853c42
+  unicode-emoji (4.2.0) sha256=519e69150f75652e40bf736106cfbc8f0f73aa3fb6a65afe62fefa7f80b0f80f
 
 BUNDLED WITH
   4.0.11
