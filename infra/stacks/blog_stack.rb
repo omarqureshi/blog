@@ -171,7 +171,7 @@ class BlogStack < AWSCDK::Stack
 
     # Lambda Function for Analytics API
     analytics_lambda = AWSCDK::AWSLambda::Function.new(self, 'AnalyticsLambda', {
-      runtime: AWSCDK::AWSLambda::Runtime::RUBY_3_2,
+      runtime: AWSCDK::AWSLambda::Runtime.RUBY_3_2,
       handler: 'analytics.handler',
       code: AWSCDK::AWSLambda::Code.from_asset('lambda'),
       timeout: AWSCDK::Duration.seconds(30),
