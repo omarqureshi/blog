@@ -200,21 +200,21 @@ class BlogStack < AWSCDK::Stack
     api = AWSCDK::AWSApigateway::RestApi.new(self, 'AnalyticsApi', {
       rest_api_name: 'Blog Analytics API',
       default_cors_preflight_options: {
-        allow_origins: AWSCDK::AWSApiGateway::Cors.ALL_ORIGINS,
-        allow_methods: AWSCDK::AWSApiGateway::Cors.ALL_METHODS
+        allow_origins: AWSCDK::AWSApigateway::Cors.ALL_ORIGINS,
+        allow_methods: AWSCDK::AWSApigateway::Cors.ALL_METHODS
       }
     })
 
     # Cognito Authorizer
-    authorizer = AWSCDK::AWSApiGateway::CognitoUserPoolsAuthorizer.new(self, 'AdminAuthorizer', {
+    authorizer = AWSCDK::AWSApigateway::CognitoUserPoolsAuthorizer.new(self, 'AdminAuthorizer', {
       cognito_user_pools: [user_pool]
     })
 
     # API Endpoint
     analytics_resource = api.root.add_resource('analytics')
-    analytics_resource.add_method('GET', AWSCDK::AWSApiGateway::LambdaIntegration.new(analytics_lambda), {
+    analytics_resource.add_method('GET', AWSCDK::AWSApigateway::LambdaIntegration.new(analytics_lambda), {
       authorizer: authorizer,
-      authorization_type: AWSCDK::AWSApiGateway::AuthorizationType.COGNITO
+      authorization_type: AWSCDK::AWSApigateway::AuthorizationType.COGNITO
     })
 
     # Outputs
