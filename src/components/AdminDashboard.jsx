@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CognitoUserPool, AuthenticationDetails, CognitoUser } from 'amazon-cognito-identity-js';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import './AdminDashboard.css';
 
 export default function AdminDashboard() {
   const [session, setSession] = useState(null);
@@ -118,20 +119,20 @@ export default function AdminDashboard() {
 
   if (!session) {
     return (
-      <div style={{ maxWidth: '400px', margin: '100px auto' }}>
+      <div className="admin-login-container">
         <h2>Admin Login</h2>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
+        {error && <p className="admin-error">{error}</p>}
         {requireNewPassword ? (
-          <form onSubmit={handleNewPassword} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          <form onSubmit={handleNewPassword} className="admin-form">
             <p>You must change your temporary password.</p>
-            <input type="password" placeholder="New Password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required style={{ padding: '10px', background: 'var(--header-bg)', color: 'inherit', border: '1px solid rgb(var(--gray-light))', borderRadius: '4px' }} />
-            <button type="submit" style={{ padding: '10px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Set Password</button>
+            <input type="password" placeholder="New Password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required className="admin-input" />
+            <button type="submit" className="admin-button">Set Password</button>
           </form>
         ) : (
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required style={{ padding: '10px', background: 'var(--header-bg)', color: 'inherit', border: '1px solid rgb(var(--gray-light))', borderRadius: '4px' }} />
-            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required style={{ padding: '10px', background: 'var(--header-bg)', color: 'inherit', border: '1px solid rgb(var(--gray-light))', borderRadius: '4px' }} />
-            <button type="submit" style={{ padding: '10px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Login</button>
+          <form onSubmit={handleLogin} className="admin-form">
+            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="admin-input" />
+            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="admin-input" />
+            <button type="submit" className="admin-button">Login</button>
           </form>
         )}
       </div>
@@ -139,29 +140,29 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div style={{ padding: '40px', maxWidth: '800px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ color: 'rgb(var(--black))' }}>Analytics Dashboard</h1>
-        <button onClick={handleLogout} style={{ padding: '8px 16px', background: 'var(--header-bg)', color: 'inherit', border: '1px solid rgb(var(--gray-light))', borderRadius: '4px', cursor: 'pointer' }}>Logout</button>
+    <div className="admin-dashboard-container">
+      <div className="admin-header">
+        <h1>Analytics Dashboard</h1>
+        <button onClick={handleLogout} className="admin-button-secondary">Logout</button>
       </div>
 
       {loading && <p>Loading real-time analytics...</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {error && <p className="admin-error">{error}</p>}
       
       {data && (
-        <div style={{ marginTop: '20px' }}>
-          <div style={{ display: 'flex', gap: '20px', marginBottom: '40px' }}>
-            <div style={{ padding: '20px', background: 'var(--header-bg)', borderRadius: '8px', flex: 1, border: '1px solid rgb(var(--gray-light))' }}>
-              <h3 style={{ margin: 0, color: 'var(--accent)' }}>Total Pageviews</h3>
-              <p style={{ fontSize: '2.5em', margin: '10px 0 0', fontWeight: 'bold', color: 'rgb(var(--black))' }}>{data.total_views}</p>
+        <div>
+          <div className="admin-metrics-row">
+            <div className="admin-card">
+              <h3>Total Pageviews</h3>
+              <p>{data.total_views}</p>
             </div>
-            <div style={{ padding: '20px', background: 'var(--header-bg)', borderRadius: '8px', flex: 1, border: '1px solid rgb(var(--gray-light))' }}>
-              <h3 style={{ margin: 0, color: 'var(--accent)' }}>Unique Visitors (7d)</h3>
-              <p style={{ fontSize: '2.5em', margin: '10px 0 0', fontWeight: 'bold', color: 'rgb(var(--black))' }}>{data.unique_visitors}</p>
+            <div className="admin-card">
+              <h3>Unique Visitors (7d)</h3>
+              <p>{data.unique_visitors}</p>
             </div>
           </div>
 
-          <div style={{ height: '300px', marginBottom: '40px' }}>
+          <div className="admin-chart-container">
             <h3>Top Pages</h3>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.top_pages} layout="vertical" margin={{ left: 50 }}>
@@ -173,18 +174,18 @@ export default function AdminDashboard() {
             </ResponsiveContainer>
           </div>
 
-          <div style={{ display: 'flex', gap: '40px' }}>
-            <div style={{ flex: 1 }}>
+          <div className="admin-lists-row">
+            <div className="admin-list-col">
               <h3>Top Referrers</h3>
-              <ul style={{ paddingLeft: '20px' }}>
+              <ul className="admin-list">
                 {data.top_referrers.map((r, i) => (
                   <li key={i}>{r.referrer} ({r.views} views)</li>
                 ))}
               </ul>
             </div>
-            <div style={{ flex: 1 }}>
+            <div className="admin-list-col">
               <h3>Top Countries</h3>
-              <ul style={{ paddingLeft: '20px' }}>
+              <ul className="admin-list">
                 {data.top_countries.map((c, i) => (
                   <li key={i}>{c.country} ({c.views} views)</li>
                 ))}
