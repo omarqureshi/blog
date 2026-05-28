@@ -131,7 +131,7 @@ class BlogStack < AWSCDK::Stack
               allowed_methods: AWSCDK::AWSCloudfront::CloudFrontAllowedMethods::ALL,
               forwarded_values: AWSCDK::AWSCloudfront::CfnDistribution::ForwardedValuesProperty.new(
                 query_string: true,
-                headers: ['CloudFront-Viewer-Country', 'CloudFront-Viewer-City']
+                headers: ['CloudFront-Viewer-Country', 'CloudFront-Viewer-City', 'Authorization']
               )
             )
           ]
