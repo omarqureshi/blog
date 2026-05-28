@@ -88,7 +88,8 @@ class BlogStack < AWSCDK::Stack
     AWSCDK::AWSRoute53Patterns::HttpsRedirect.new(self, 'WwwRedirect', {
       record_names: ["www.#{domain_name}"],
       target_domain: domain_name,
-      zone: zone
+      zone: zone,
+      delete_existing: true
     })
 
     # --- ANALYTICS INFRASTRUCTURE ---
