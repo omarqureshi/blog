@@ -3,61 +3,21 @@
 require 'aws-cdk-lib'
 
 class BlogStack < AWSCDK::Stack
+  DOMAIN = 'omarqureshi.net'
+
+  attr_reader :zone, :certificate, :site_bucket, :logs_bucket, :analytics_table
+
   def initialize(scope, id, props = nil)
     super(scope, id, props)
-
-    domain_name = 'omarqureshi.net'
-
-    # Lookup the existing Route53 Hosted Zone
-    zone = AWSCDK::AWSRoute53::HostedZone.from_lookup(self, 'HostedZone', {
-                                                        domain_name: domain_name
-                                                      })
-
-    # Create the S3 Bucket to host the site
-    site_bucket = AWSCDK::AWSS3::Bucket.new(self, 'SiteBucket', {
-                                              bucket_name: domain_name,
-                                              website_index_document: 'index.html',
-                                              website_error_document: '404.html',
-                                              public_read_access: true,
-                                              block_public_access: AWSCDK::AWSS3::BlockPublicAccess.new(
-                                                block_public_acls: false,
-                                                block_public_policy: false,
-                                                ignore_public_acls: false,
-                                                restrict_public_buckets: false
-                                              ),
-                                              removal_policy: AWSCDK::RemovalPolicy::DESTROY,
-                                              auto_delete_objects: true
-                                            })
-
-    # Request an ACM Certificate
-    certificate = AWSCDK::AWSCertificatemanager::Certificate.new(self, 'SiteCertificate', {
-                                                                   domain_name: domain_name,
-                                                                   validation: AWSCDK::AWSCertificatemanager::CertificateValidation.from_dns(zone)
-                                                                 })
-
-    # S3 Bucket for CloudFront Access Logs
-    logs_bucket = AWSCDK::AWSS3::Bucket.new(self, 'CloudFrontLogsBucket', {
-                                              removal_policy: AWSCDK::RemovalPolicy::DESTROY,
-                                              auto_delete_objects: true,
-                                              block_public_access: AWSCDK::AWSS3::BlockPublicAccess.BLOCK_ALL,
-                                              object_ownership: AWSCDK::AWSS3::ObjectOwnership::OBJECT_WRITER
-                                            })
-
-    # --- NEW ANALYTICS INFRASTRUCTURE ---
-
-    # DynamoDB Table for Analytics
-    analytics_table = AWSCDK::AWSDynamodb::Table.new(self, 'BlogAnalytics', {
-                                                       partition_key: { name: 'pk',
-                                                                        type: AWSCDK::AWSDynamodb::AttributeType::STRING },
-                                                       sort_key: { name: 'sk',
-                                                                   type: AWSCDK::AWSDynamodb::AttributeType::STRING },
-                                                       billing_mode: AWSCDK::AWSDynamodb::BillingMode::PAY_PER_REQUEST,
-                                                       removal_policy: AWSCDK::RemovalPolicy::DESTROY # Safe to destroy for blog
-                                                     })
+    @zone = load_zone
+    @certificate = create_certificate
+    @site_bucket = create_site_bucket
+    @logs_bucket = create_logs_bucket
+    @analytics_table = create_analytics_table
 
     # Lambda Function for Analytics API
     analytics_lambda = AWSCDK::AWSLambda::Function.new(self, 'AnalyticsLambda', {
-                                                         runtime: AWSCDK::AWSLambda::Runtime.RUBY_3_2,
+                                                         runtime: AWSCDK::AWSLambda::Runtime.RUBY_4_0,
                                                          handler: 'analytics.handler',
                                                          code: AWSCDK::AWSLambda::Code.from_asset('lambda'),
                                                          timeout: AWSCDK::Duration.seconds(10),
@@ -151,9 +111,9 @@ class BlogStack < AWSCDK::Stack
                                                                             )
                                                                           ],
                                                                           viewer_certificate: AWSCDK::AWSCloudfront::ViewerCertificate.from_acm_certificate(
-                                                                            certificate,
+                                                                            @certificate,
                                                                             {
-                                                                              aliases: [domain_name],
+                                                                              aliases: [DOMAIN],
                                                                               security_policy: AWSCDK::AWSCloudfront::SecurityPolicyProtocol::TLS_V1_2_2021,
                                                                               ssl_method: AWSCDK::AWSCloudfront::SSLMethod::SNI
                                                                             }
@@ -162,7 +122,7 @@ class BlogStack < AWSCDK::Stack
 
     # Route53 Alias Record to CloudFront
     AWSCDK::AWSRoute53::ARecord.new(self, 'SiteAliasRecord', {
-                                      record_name: domain_name,
+                                      record_name: DOMAIN,
                                       target: AWSCDK::AWSRoute53::RecordTarget.from_alias(
                                         AWSCDK::AWSRoute53Targets::CloudFrontTarget.new(distribution)
                                       ),
@@ -181,7 +141,7 @@ class BlogStack < AWSCDK::Stack
     # Automatically redirect www.omarqureshi.net to omarqureshi.net over HTTPS
     AWSCDK::AWSRoute53Patterns::HttpsRedirect.new(self, 'WwwRedirect', {
                                                     record_names: ["www.#{domain_name}"],
-                                                    target_domain: domain_name,
+                                                    target_domain: DOMAIN,
                                                     zone: zone
                                                   })
 
@@ -190,4 +150,77 @@ class BlogStack < AWSCDK::Stack
     AWSCDK::CfnOutput.new(self, 'UserPoolId', { value: user_pool.user_pool_id })
     AWSCDK::CfnOutput.new(self, 'UserPoolClientId', { value: user_pool_client.user_pool_client_id })
   end
+
+  private
+
+  # Lookup the existing Route53 Hosted Zone
+  def load_zone
+    AWSCDK::AWSRoute53::HostedZone.from_lookup(
+      self,
+      'HostedZone',
+      {
+        domain_name: DOMAIN
+      }
+    )
+  end
+
+  # Request an ACM Certificate
+  def create_certificate
+    AWSCDK::AWSCertificatemanager::Certificate.new(
+      self,
+      'SiteCertificate',
+      {
+        domain_name: DOMAIN,
+        validation: AWSCDK::AWSCertificatemanager::CertificateValidation.from_dns(@zone)
+      }
+    )
+  end
+
+  def create_site_bucket
+    AWSCDK::AWSS3::Bucket.new(
+      self,
+      'SiteBucket',
+      {
+        bucket_name: DOMAIN,
+        website_index_document: 'index.html',
+        website_error_document: '404.html',
+        public_read_access: true,
+        block_public_access: AWSCDK::AWSS3::BlockPublicAccess.new(
+          block_public_acls: false,
+          block_public_policy: false,
+          ignore_public_acls: false,
+          restrict_public_buckets: false
+        ),
+        removal_policy: AWSCDK::RemovalPolicy::DESTROY,
+        auto_delete_objects: true
+      }
+    )
+  end
+
+  def create_logs_bucket
+    AWSCDK::AWSS3::Bucket.new(
+      self,
+      'CloudFrontLogsBucket',
+      {
+        removal_policy: AWSCDK::RemovalPolicy::DESTROY,
+        auto_delete_objects: true,
+        block_public_access: AWSCDK::AWSS3::BlockPublicAccess.BLOCK_ALL,
+        object_ownership: AWSCDK::AWSS3::ObjectOwnership::OBJECT_WRITER
+      }
+    )
+  end
+
+  def create_analytics_table
+    AWSCDK::AWSDynamodb::Table.new(
+      self,
+      'BlogAnalytics',
+      {
+        partition_key: { name: 'pk', type: AWSCDK::AWSDynamodb::AttributeType::STRING },
+        sort_key: { name: 'sk', type: AWSCDK::AWSDynamodb::AttributeType::STRING },
+        billing_mode: AWSCDK::AWSDynamodb::BillingMode::PAY_PER_REQUEST,
+        removal_policy: AWSCDK::RemovalPolicy::DESTROY # Safe to destroy for blog
+      }
+    )
+  end
+
 end
