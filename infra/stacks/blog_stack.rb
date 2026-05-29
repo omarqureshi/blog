@@ -140,7 +140,7 @@ class BlogStack < AWSCDK::Stack
 
     # Automatically redirect www.omarqureshi.net to omarqureshi.net over HTTPS
     AWSCDK::AWSRoute53Patterns::HttpsRedirect.new(self, 'WwwRedirect', {
-                                                    record_names: ["www.#{domain_name}"],
+                                                    record_names: ["www.#{DOMAIN}"],
                                                     target_domain: DOMAIN,
                                                     zone: zone
                                                   })
