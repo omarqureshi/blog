@@ -9,9 +9,9 @@ require 'digest'
 HEADERS = {
   'Access-Control-Allow-Origin' => '*',
   'Content-Type' => 'application/json'
-}.freeze!
+}.freeze
 
-TABLE_NAME = ENV['TABLE_NAME'].freeze!
+TABLE_NAME = ENV['TABLE_NAME'].freeze
 
 # Disable UnusedMethodArgument for context variable
 # rubocop:disable Lint/UnusedMethodArgument
