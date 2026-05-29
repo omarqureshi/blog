@@ -2,10 +2,26 @@
 
 require 'aws-cdk-lib'
 
+# Blog Stack
 class BlogStack < AWSCDK::Stack
   DOMAIN = 'omarqureshi.net'
+  HEADERS = %w[CloudFront-Viewer-Country CloudFront-Viewer-City Authorization].freeze!
+  USER_POOL_PROPS = {
+    user_pool_name: 'BlogAdminPool',
+    self_sign_up_enabled: false,
+    sign_in_aliases: { email: true },
+    auto_verify: { email: true },
+    password_policy: {
+      min_length: 8,
+      require_lowercase: true,
+      require_uppercase: true,
+      require_digits: true,
+      require_symbols: false
+    }
+  }.freeze!
 
-  attr_reader :zone, :certificate, :site_bucket, :logs_bucket, :analytics_table
+  attr_reader :zone, :certificate, :site_bucket, :logs_bucket, :analytics_table, :analytics_lambda,
+              :api, :user_pool, :authorizer, :user_pool_client, :distribution
 
   def initialize(scope, id, props = nil)
     super(scope, id, props)
@@ -13,145 +29,33 @@ class BlogStack < AWSCDK::Stack
     @certificate = create_certificate
     @site_bucket = create_site_bucket
     @logs_bucket = create_logs_bucket
-    @analytics_table = create_analytics_table
-
-    # Lambda Function for Analytics API
-    analytics_lambda = AWSCDK::AWSLambda::Function.new(self, 'AnalyticsLambda', {
-                                                         runtime: AWSCDK::AWSLambda::Runtime.RUBY_4_0,
-                                                         handler: 'analytics.handler',
-                                                         code: AWSCDK::AWSLambda::Code.from_asset('lambda'),
-                                                         timeout: AWSCDK::Duration.seconds(10),
-                                                         memory_size: 256,
-                                                         environment: {
-                                                           'TABLE_NAME' => analytics_table.table_name
-                                                         }
-                                                       })
-
-    analytics_table.grant_read_write_data(analytics_lambda)
-
-    # API Gateway
-    api = AWSCDK::AWSApigateway::RestApi.new(self, 'AnalyticsApi', {
-                                               rest_api_name: 'Blog Analytics API',
-                                               default_cors_preflight_options: {
-                                                 allow_origins: AWSCDK::AWSApigateway::Cors.ALL_ORIGINS,
-                                                 allow_methods: AWSCDK::AWSApigateway::Cors.ALL_METHODS
-                                               }
-                                             })
-
-    # Cognito User Pool for Admin Access
-    user_pool = AWSCDK::AWSCognito::UserPool.new(self, 'AdminUserPool', {
-                                                   user_pool_name: 'BlogAdminPool',
-                                                   self_sign_up_enabled: false,
-                                                   sign_in_aliases: { email: true },
-                                                   auto_verify: { email: true },
-                                                   password_policy: {
-                                                     min_length: 8,
-                                                     require_lowercase: true,
-                                                     require_uppercase: true,
-                                                     require_digits: true,
-                                                     require_symbols: false
-                                                   }
-                                                 })
-
-    user_pool_client = user_pool.add_client('AdminWebClient', {
-                                              generate_secret: false,
-                                              auth_flows: { user_password: true, user_srp: true }
-                                            })
-
-    authorizer = AWSCDK::AWSApigateway::CognitoUserPoolsAuthorizer.new(self, 'AdminAuthorizer', {
-                                                                         cognito_user_pools: [user_pool]
-                                                                       })
-
-    # API Endpoints
-    api_resource = api.root.add_resource('api')
-
-    # POST /api/track (Public Tracking Endpoint)
-    track_resource = api_resource.add_resource('track')
-    track_resource.add_method('POST', AWSCDK::AWSApigateway::LambdaIntegration.new(analytics_lambda))
-
-    # GET /api/analytics (Protected Dashboard Endpoint)
-    analytics_resource = api_resource.add_resource('analytics')
-    analytics_resource.add_method('GET', AWSCDK::AWSApigateway::LambdaIntegration.new(analytics_lambda), {
-                                    authorizer: authorizer,
-                                    authorization_type: AWSCDK::AWSApigateway::AuthorizationType::COGNITO
-                                  })
-
-    # Create the CloudFront Distribution with Logging and API Routing
-    distribution = AWSCDK::AWSCloudfront::CloudFrontWebDistribution.new(self, 'SiteDistribution', {
-                                                                          logging_config: {
-                                                                            bucket: logs_bucket,
-                                                                            include_cookies: false
-                                                                          },
-                                                                          origin_configs: [
-                                                                            AWSCDK::AWSCloudfront::SourceConfiguration.new(
-                                                                              custom_origin_source: AWSCDK::AWSCloudfront::CustomOriginConfig.new(
-                                                                                domain_name: "#{api.rest_api_id}.execute-api.#{region}.amazonaws.com",
-                                                                                origin_path: '/prod',
-                                                                                origin_protocol_policy: AWSCDK::AWSCloudfront::OriginProtocolPolicy::HTTPS_ONLY
-                                                                              ),
-                                                                              behaviors: [
-                                                                                AWSCDK::AWSCloudfront::Behavior.new(
-                                                                                  path_pattern: '/api/*',
-                                                                                  allowed_methods: AWSCDK::AWSCloudfront::CloudFrontAllowedMethods::ALL,
-                                                                                  forwarded_values: AWSCDK::AWSCloudfront::CfnDistribution::ForwardedValuesProperty.new(
-                                                                                    query_string: true,
-                                                                                    headers: %w[
-                                                                                      CloudFront-Viewer-Country CloudFront-Viewer-City Authorization
-                                                                                    ]
-                                                                                  )
-                                                                                )
-                                                                              ]
-                                                                            ),
-                                                                            AWSCDK::AWSCloudfront::SourceConfiguration.new(
-                                                                              custom_origin_source: AWSCDK::AWSCloudfront::CustomOriginConfig.new(
-                                                                                domain_name: site_bucket.bucket_website_domain_name,
-                                                                                origin_protocol_policy: AWSCDK::AWSCloudfront::OriginProtocolPolicy::HTTP_ONLY
-                                                                              ),
-                                                                              behaviors: [AWSCDK::AWSCloudfront::Behavior.new(is_default_behavior: true)]
-                                                                            )
-                                                                          ],
-                                                                          viewer_certificate: AWSCDK::AWSCloudfront::ViewerCertificate.from_acm_certificate(
-                                                                            @certificate,
-                                                                            {
-                                                                              aliases: [DOMAIN],
-                                                                              security_policy: AWSCDK::AWSCloudfront::SecurityPolicyProtocol::TLS_V1_2_2021,
-                                                                              ssl_method: AWSCDK::AWSCloudfront::SSLMethod::SNI
-                                                                            }
-                                                                          )
-                                                                        })
-
-    # Route53 Alias Record to CloudFront
-    AWSCDK::AWSRoute53::ARecord.new(self, 'SiteAliasRecord', {
-                                      record_name: DOMAIN,
-                                      target: AWSCDK::AWSRoute53::RecordTarget.from_alias(
-                                        AWSCDK::AWSRoute53Targets::CloudFrontTarget.new(distribution)
-                                      ),
-                                      zone: zone,
-                                      delete_existing: true
-                                    })
-
-    # Deploy the static site
-    AWSCDK::AWSS3Deployment::BucketDeployment.new(self, 'DeployWithInvalidation', {
-                                                    sources: [AWSCDK::AWSS3Deployment::Source.asset('../dist')],
-                                                    destination_bucket: site_bucket,
-                                                    distribution: distribution,
-                                                    distribution_paths: ['/*']
-                                                  })
-
-    # Automatically redirect www.omarqureshi.net to omarqureshi.net over HTTPS
-    AWSCDK::AWSRoute53Patterns::HttpsRedirect.new(self, 'WwwRedirect', {
-                                                    record_names: ["www.#{DOMAIN}"],
-                                                    target_domain: DOMAIN,
-                                                    zone: zone
-                                                  })
-
-    # Outputs
-    AWSCDK::CfnOutput.new(self, 'ApiEndpoint', { value: api.url })
-    AWSCDK::CfnOutput.new(self, 'UserPoolId', { value: user_pool.user_pool_id })
-    AWSCDK::CfnOutput.new(self, 'UserPoolClientId', { value: user_pool_client.user_pool_client_id })
+    analytics_setup
+    cognito_setup
+    api_gateway_setup
+    @distribution = create_distribution
+    add_route53_alias
+    redirect_www
+    deploy
   end
 
   private
+
+  def analytics_setup
+    @analytics_table = create_analytics_table
+    @analytics_lambda = create_analytics_lambda
+    analytics_table.grant_read_write_data(analytics_lambda)
+  end
+
+  def cognito_setup
+    @user_pool = create_user_pool
+    @authorizer = create_authorizer
+    @user_pool_client = create_user_pool_client
+  end
+
+  def api_gateway_setup
+    @api = create_api_gateway
+    create_api_endpoints
+  end
 
   # Lookup the existing Route53 Hosted Zone
   def load_zone
@@ -171,7 +75,7 @@ class BlogStack < AWSCDK::Stack
       'SiteCertificate',
       {
         domain_name: DOMAIN,
-        validation: AWSCDK::AWSCertificatemanager::CertificateValidation.from_dns(@zone)
+        validation: AWSCDK::AWSCertificatemanager::CertificateValidation.from_dns(zone)
       }
     )
   end
@@ -223,4 +127,167 @@ class BlogStack < AWSCDK::Stack
     )
   end
 
+  def create_analytics_lambda
+    AWSCDK::AWSLambda::Function.new(
+      self,
+      'AnalyticsLambda',
+      {
+        runtime: AWSCDK::AWSLambda::Runtime.RUBY_4_0,
+        handler: 'analytics.handler',
+        code: AWSCDK::AWSLambda::Code.from_asset('lambda'),
+        timeout: AWSCDK::Duration.seconds(10),
+        memory_size: 256,
+        environment: {
+          'TABLE_NAME' => analytics_table.table_name
+        }
+      }
+    )
+  end
+
+  def create_api_gateway
+    AWSCDK::AWSApigateway::RestApi.new(
+      self,
+      'AnalyticsApi', {
+        rest_api_name: 'Blog Analytics API',
+        default_cors_preflight_options: {
+          allow_origins: AWSCDK::AWSApigateway::Cors.ALL_ORIGINS,
+          allow_methods: AWSCDK::AWSApigateway::Cors.ALL_METHODS
+        }
+      }
+    )
+  end
+
+  def create_user_pool
+    AWSCDK::AWSCognito::UserPool.new(
+      self,
+      'AdminUserPool',
+      USER_POOL_PROPS
+    )
+  end
+
+  def create_authorizer
+    AWSCDK::AWSApigateway::CognitoUserPoolsAuthorizer.new(
+      self,
+      'AdminAuthorizer',
+      {
+        cognito_user_pools: [user_pool]
+      }
+    )
+  end
+
+  def create_user_pool_client
+    user_pool.add_client(
+      'AdminWebClient',
+      {
+        generate_secret: false,
+        auth_flows: { user_password: true, user_srp: true }
+      }
+    )
+  end
+
+  def create_api_endpoints
+    api_resource = api.root.add_resource('api')
+    # POST /api/track (Public Tracking Endpoint)
+    api_resource.add_resource('track').add_method(
+      'POST', AWSCDK::AWSApigateway::LambdaIntegration.new(analytics_lambda)
+    )
+    # GET /api/analytics (Protected Dashboard Endpoint)
+    api_resource.add_resource('analytics').add_method(
+      'GET', AWSCDK::AWSApigateway::LambdaIntegration.new(analytics_lambda), {
+        authorizer: authorizer,
+        authorization_type: AWSCDK::AWSApigateway::AuthorizationType::COGNITO
+      }
+    )
+  end
+
+  def create_distribution
+    AWSCDK::AWSCloudfront::CloudFrontWebDistribution.new(
+      self,
+      'SiteDistribution', {
+        logging_config: {
+          bucket: logs_bucket,
+          include_cookies: false
+        },
+        origin_configs: [
+          AWSCDK::AWSCloudfront::SourceConfiguration.new(
+            custom_origin_source: AWSCDK::AWSCloudfront::CustomOriginConfig.new(
+              domain_name: "#{api.rest_api_id}.execute-api.#{region}.amazonaws.com",
+              origin_path: '/prod',
+              origin_protocol_policy: AWSCDK::AWSCloudfront::OriginProtocolPolicy::HTTPS_ONLY
+            ),
+            behaviors: [
+              AWSCDK::AWSCloudfront::Behavior.new(
+                path_pattern: '/api/*',
+                allowed_methods: AWSCDK::AWSCloudfront::CloudFrontAllowedMethods::ALL,
+                forwarded_values: AWSCDK::AWSCloudfront::CfnDistribution::ForwardedValuesProperty.new(
+                  query_string: true,
+                  headers: HEADERS
+                )
+              )
+            ]
+          ),
+          AWSCDK::AWSCloudfront::SourceConfiguration.new(
+            custom_origin_source: AWSCDK::AWSCloudfront::CustomOriginConfig.new(
+              domain_name: site_bucket.bucket_website_domain_name,
+              origin_protocol_policy: AWSCDK::AWSCloudfront::OriginProtocolPolicy::HTTP_ONLY
+            ),
+            behaviors: [AWSCDK::AWSCloudfront::Behavior.new(is_default_behavior: true)]
+          )
+        ],
+        viewer_certificate: AWSCDK::AWSCloudfront::ViewerCertificate.from_acm_certificate(
+          certificate,
+          {
+            aliases: [DOMAIN],
+            security_policy: AWSCDK::AWSCloudfront::SecurityPolicyProtocol::TLS_V1_2_2021,
+            ssl_method: AWSCDK::AWSCloudfront::SSLMethod::SNI
+          }
+        )
+      }
+    )
+  end
+
+  def add_route53_alias
+    AWSCDK::AWSRoute53::ARecord.new(
+      self,
+      'SiteAliasRecord',
+      {
+        record_name: DOMAIN,
+        target: AWSCDK::AWSRoute53::RecordTarget.from_alias(AWSCDK::AWSRoute53Targets::CloudFrontTarget.new(distribution)),
+        zone: zone,
+        delete_existing: true
+      }
+    )
+  end
+
+  def deploy
+    AWSCDK::AWSS3Deployment::BucketDeployment.new(
+      self,
+      'DeployWithInvalidation',
+      {
+        sources: [AWSCDK::AWSS3Deployment::Source.asset('../dist')],
+        destination_bucket: site_bucket,
+        distribution: distribution,
+        distribution_paths: ['/*']
+      }
+    )
+    output
+  end
+
+  def redirect_www
+    AWSCDK::AWSRoute53Patterns::HttpsRedirect.new(
+      self,
+      'WwwRedirect',
+      {
+        record_names: ["www.#{DOMAIN}"],
+        target_domain: DOMAIN,
+        zone: zone
+      }
+    )
+  end
+
+  def output
+    AWSCDK::CfnOutput.new(self, 'ApiEndpoint', { value: api.url })
+    AWSCDK::CfnOutput.new(self, 'UserPoolId', { value: user_pool.user_pool_id })
+    AWSCDK::CfnOutput.new(self, 'UserPoolClientId', { value: user_pool_client.user_pool_client_id })
+  end
 end
