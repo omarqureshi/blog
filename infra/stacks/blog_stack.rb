@@ -5,7 +5,7 @@ require 'aws-cdk-lib'
 # Blog Stack
 class BlogStack < AWSCDK::Stack
   DOMAIN = 'omarqureshi.net'
-  HEADERS = %w[CloudFront-Viewer-Country CloudFront-Viewer-City Authorization].freeze!
+  HEADERS = %w[CloudFront-Viewer-Country CloudFront-Viewer-City Authorization].freeze
   USER_POOL_PROPS = {
     user_pool_name: 'BlogAdminPool',
     self_sign_up_enabled: false,
@@ -18,7 +18,7 @@ class BlogStack < AWSCDK::Stack
       require_digits: true,
       require_symbols: false
     }
-  }.freeze!
+  }.freeze
 
   attr_reader :zone, :certificate, :site_bucket, :logs_bucket, :analytics_table, :analytics_lambda,
               :api, :user_pool, :authorizer, :user_pool_client, :distribution
