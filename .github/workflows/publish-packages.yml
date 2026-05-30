@@ -39,6 +39,7 @@ jobs:
         with:
           node-version: '22'
           registry-url: 'https://npm.pkg.github.com'
+          scope: '@omarqureshi'
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -69,6 +70,23 @@ jobs:
           yarn install
           yarn build
 
+      - name: Publish Patched NPM Packages to GitHub Packages
+        working-directory: jsii
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 1. Publish patched jsii compiler (compiled in node_modules after patch is applied)
+          cd node_modules/jsii
+          jq ".name = \"@omarqureshi/jsii\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"}" package.json > tmp.json && mv tmp.json package.json
+          npm publish
+          cd ../..
+
+          # 2. Publish patched jsii-rosetta
+          cd node_modules/jsii-rosetta
+          jq ".name = \"@omarqureshi/jsii-rosetta\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"}" package.json > tmp.json && mv tmp.json package.json
+          npm publish
+          cd ../..
+
       - name: Publish jsii-ruby-runtime (RubyGem)
         working-directory: jsii/packages/@jsii/ruby-runtime
         run: |
@@ -94,7 +112,15 @@ jobs:
         working-directory: aws-cdk
         run: |
           corepack enable
-          yarn install
+
+          # Write .npmrc to authenticate and pull @omarqureshi scope from GitHub Packages
+          echo "@omarqureshi:registry=https://npm.pkg.github.com" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" >> .npmrc
+
+          # Update package.json resolutions to point to the newly published dynamic package versions
+          jq ".resolutions.jsii = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\" | .resolutions[\"jsii-rosetta\"] = \"npm:@omarqureshi/jsii-rosetta@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
+
+          env NODE_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }} yarn install
           npx lerna run build --scope aws-cdk-lib --include-dependencies
 
           # Publish nested dependencies
