@@ -89,6 +89,12 @@ jobs:
           npm publish
           cd ../..
 
+          # 3. Publish modified @jsii/spec
+          cd packages/@jsii/spec
+          jq ".name = \"@omarqureshi/jsii-spec\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"}" package.json > tmp.json && mv tmp.json package.json
+          npm publish
+          cd ../../..
+
       - name: Publish jsii-ruby-runtime (RubyGem)
         working-directory: jsii/packages/@jsii/ruby-runtime
         run: |
@@ -120,7 +126,7 @@ jobs:
           echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" >> .npmrc
 
           # Update package.json resolutions to point to the newly published dynamic package versions and remove pacmak resolution
-          jq ".resolutions.jsii = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\" | .resolutions[\"jsii-rosetta\"] = \"npm:@omarqureshi/jsii-rosetta@${{ env.NPM_VERSION }}\" | del(.resolutions[\"jsii-pacmak\"])" package.json > tmp.json && mv tmp.json package.json
+          jq ".resolutions.jsii = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\" | .resolutions[\"jsii-rosetta\"] = \"npm:@omarqureshi/jsii-rosetta@${{ env.NPM_VERSION }}\" | .resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | del(.resolutions[\"jsii-pacmak\"])" package.json > tmp.json && mv tmp.json package.json
 
           env NODE_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }} yarn install
           npx lerna run build --scope aws-cdk-lib --include-dependencies
