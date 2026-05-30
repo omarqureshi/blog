@@ -119,8 +119,8 @@ jobs:
           echo "@omarqureshi:registry=https://npm.pkg.github.com" > .npmrc
           echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" >> .npmrc
 
-          # Update package.json resolutions to point to the newly published dynamic package versions
-          jq ".resolutions.jsii = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\" | .resolutions[\"jsii-rosetta\"] = \"npm:@omarqureshi/jsii-rosetta@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
+          # Update package.json resolutions to point to the newly published dynamic package versions and remove pacmak resolution
+          jq ".resolutions.jsii = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\" | .resolutions[\"jsii-rosetta\"] = \"npm:@omarqureshi/jsii-rosetta@${{ env.NPM_VERSION }}\" | del(.resolutions[\"jsii-pacmak\"])" package.json > tmp.json && mv tmp.json package.json
 
           env NODE_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }} yarn install
           npx lerna run build --scope aws-cdk-lib --include-dependencies
