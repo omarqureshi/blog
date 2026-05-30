@@ -30,8 +30,8 @@ jobs:
       - name: Checkout AWS CDK
         uses: actions/checkout@v4
         with:
-          repository: aws/aws-cdk
-          ref: main
+          repository: omarqureshi/aws-cdk
+          ref: ruby-language-bindings
           path: aws-cdk
 
       - name: Setup Node.js
@@ -110,7 +110,7 @@ jobs:
             else
               cp .jsii tmp_src.jsii
             fi
-            jq ".version = \"${{ env.NPM_VERSION }}\" | .targets.ruby = {\"gem\": \"$GEM_NAME\", \"module\": \"$MODULE_NAME\"}" tmp_src.jsii > tmp.jsii && mv tmp.jsii .jsii
+            jq ".version = \"${{ env.NPM_VERSION }}\" | .targets.ruby.gem = \"$GEM_NAME\" | .targets.ruby.module = \"$MODULE_NAME\"" tmp_src.jsii > tmp.jsii && mv tmp.jsii .jsii
             if [ -f .jsii.gz ]; then
               gzip -c .jsii > .jsii.gz
               echo '{"schema":"jsii/file-redirect","compression":"gzip","filename":".jsii.gz"}' > .jsii
@@ -124,14 +124,14 @@ jobs:
           # Publish main lib
           cd $ROOT_DIR/packages/aws-cdk-lib
           jq ".version = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
-          jq '.jsii.targets.ruby = {"gem": "aws-cdk-lib", "module": "AWSCDK"}' package.json > tmp.json && mv tmp.json package.json
+          jq '.jsii.targets.ruby.gem = "aws-cdk-lib" | .jsii.targets.ruby.module = "AWSCDK"' package.json > tmp.json && mv tmp.json package.json
           
           if [ -f .jsii.gz ]; then
             gunzip -c .jsii.gz > tmp_src.jsii
           else
             cp .jsii tmp_src.jsii
           fi
-          jq ".version = \"${{ env.NPM_VERSION }}\" | .targets.ruby = {\"gem\": \"aws-cdk-lib\", \"module\": \"AWSCDK\"}" tmp_src.jsii > tmp.jsii && mv tmp.jsii .jsii
+          jq ".version = \"${{ env.NPM_VERSION }}\" | .targets.ruby.gem = \"aws-cdk-lib\" | .targets.ruby.module = \"AWSCDK\"" tmp_src.jsii > tmp.jsii && mv tmp.jsii .jsii
           if [ -f .jsii.gz ]; then
             gzip -c .jsii > .jsii.gz
             echo '{"schema":"jsii/file-redirect","compression":"gzip","filename":".jsii.gz"}' > .jsii
