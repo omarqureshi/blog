@@ -99,13 +99,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # 1. Publish modified @jsii/spec
-          cd jsii/packages/@jsii/spec
+          cd $GITHUB_WORKSPACE/jsii/packages/@jsii/spec
           jq ".name = \"@omarqureshi/jsii-spec\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"}" package.json > tmp.json && mv tmp.json package.json
           npm publish
-          cd ../../..
 
           # 2. Build and publish jsii-compiler
-          cd jsii-compiler
+          cd $GITHUB_WORKSPACE/jsii-compiler
           jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           corepack enable
           yarn install
@@ -113,10 +112,9 @@ jobs:
           yarn package
           jq ".name = \"@omarqureshi/jsii\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           npm publish
-          cd ..
 
           # 3. Build and publish jsii-rosetta
-          cd jsii-rosetta
+          cd $GITHUB_WORKSPACE/jsii-rosetta
           jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .resolutions.jsii = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           corepack enable
           yarn install
@@ -124,17 +122,15 @@ jobs:
           yarn package
           jq ".name = \"@omarqureshi/jsii-rosetta\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .dependencies[\"jsii\"] = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           npm publish
-          cd ..
 
           # 4. Build and publish jsii-docgen
-          cd jsii-docgen
+          cd $GITHUB_WORKSPACE/jsii-docgen
           jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .resolutions.jsii = \"file:../jsii-compiler/dist/js/jsii-0.0.0.tgz\" | .resolutions[\"jsii-rosetta\"] = \"file:../jsii-rosetta/dist/js/jsii-rosetta-0.0.0.tgz\"" package.json > tmp.json && mv tmp.json package.json
           corepack enable
           yarn install
           yarn build
           jq ".name = \"@omarqureshi/jsii-docgen\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | del(.peerDependencies[\"jsii-rosetta\"]) | .peerDependencies[\"@omarqureshi/jsii-rosetta\"] = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           npm publish
-          cd ..
 
       - name: Publish jsii-ruby-runtime (RubyGem)
         working-directory: jsii/packages/@jsii/ruby-runtime
