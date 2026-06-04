@@ -109,7 +109,7 @@ jobs:
           yarn config set npmScopes.omarqureshi.npmAuthToken "${NODE_AUTH_TOKEN}"
           jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           corepack enable
-          yarn install
+          yarn install --no-immutable
           yarn build
           yarn package
           jq ".name = \"@omarqureshi/jsii\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
@@ -121,7 +121,7 @@ jobs:
           yarn config set npmScopes.omarqureshi.npmAuthToken "${NODE_AUTH_TOKEN}"
           jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .resolutions.jsii = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           corepack enable
-          yarn install
+          yarn install --no-immutable
           yarn build
           yarn package
           jq ".name = \"@omarqureshi/jsii-rosetta\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .dependencies[\"jsii\"] = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
@@ -133,7 +133,7 @@ jobs:
           yarn config set npmScopes.omarqureshi.npmAuthToken "${NODE_AUTH_TOKEN}"
           jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .resolutions.jsii = \"file:../jsii-compiler/dist/js/jsii-0.0.0.tgz\" | .resolutions[\"jsii-rosetta\"] = \"file:../jsii-rosetta/dist/js/jsii-rosetta-0.0.0.tgz\"" package.json > tmp.json && mv tmp.json package.json
           corepack enable
-          yarn install
+          yarn install --no-immutable
           yarn build
           jq ".name = \"@omarqureshi/jsii-docgen\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | del(.peerDependencies[\"jsii-rosetta\"]) | .peerDependencies[\"@omarqureshi/jsii-rosetta\"] = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           npm publish
