@@ -97,6 +97,8 @@ jobs:
       - name: Publish Patched NPM Packages to GitHub Packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
+          CI: 'false'
         run: |
           # 1. Publish modified @jsii/spec
           cd $GITHUB_WORKSPACE/jsii/packages/@jsii/spec
