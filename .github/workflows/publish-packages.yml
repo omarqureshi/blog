@@ -36,6 +36,28 @@ jobs:
           ref: ruby-language-bindings
           path: aws-cdk
 
+      - name: Checkout JSII Compiler
+        uses: actions/checkout@v4
+        with:
+          repository: omarqureshi/jsii-compiler
+          ref: ruby-language-bindings
+          path: jsii-compiler
+
+      - name: Checkout JSII Rosetta
+        uses: actions/checkout@v4
+        with:
+          repository: omarqureshi/jsii-rosetta
+          ref: ruby-language-bindings
+          path: jsii-rosetta
+
+      - name: Checkout JSII Docgen
+        uses: actions/checkout@v4
+        with:
+          repository: omarqureshi/jsii-docgen
+          ref: ruby-language-bindings
+          path: jsii-docgen
+
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -73,27 +95,46 @@ jobs:
           yarn build
 
       - name: Publish Patched NPM Packages to GitHub Packages
-        working-directory: jsii
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 1. Publish patched jsii compiler (compiled in node_modules after patch is applied)
-          cd node_modules/jsii
-          jq ".name = \"@omarqureshi/jsii\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"}" package.json > tmp.json && mv tmp.json package.json
-          npm publish
-          cd ../..
-
-          # 2. Publish patched jsii-rosetta
-          cd node_modules/jsii-rosetta
-          jq ".name = \"@omarqureshi/jsii-rosetta\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"}" package.json > tmp.json && mv tmp.json package.json
-          npm publish
-          cd ../..
-
-          # 3. Publish modified @jsii/spec
-          cd packages/@jsii/spec
+          # 1. Publish modified @jsii/spec
+          cd jsii/packages/@jsii/spec
           jq ".name = \"@omarqureshi/jsii-spec\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"}" package.json > tmp.json && mv tmp.json package.json
           npm publish
           cd ../../..
+
+          # 2. Build and publish jsii-compiler
+          cd jsii-compiler
+          jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
+          corepack enable
+          yarn install
+          yarn build
+          yarn package
+          jq ".name = \"@omarqureshi/jsii\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
+          npm publish
+          cd ..
+
+          # 3. Build and publish jsii-rosetta
+          cd jsii-rosetta
+          jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .resolutions.jsii = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
+          corepack enable
+          yarn install
+          yarn build
+          yarn package
+          jq ".name = \"@omarqureshi/jsii-rosetta\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .dependencies[\"jsii\"] = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
+          npm publish
+          cd ..
+
+          # 4. Build and publish jsii-docgen
+          cd jsii-docgen
+          jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .resolutions.jsii = \"file:../jsii-compiler/dist/js/jsii-0.0.0.tgz\" | .resolutions[\"jsii-rosetta\"] = \"file:../jsii-rosetta/dist/js/jsii-rosetta-0.0.0.tgz\"" package.json > tmp.json && mv tmp.json package.json
+          corepack enable
+          yarn install
+          yarn build
+          jq ".name = \"@omarqureshi/jsii-docgen\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | del(.peerDependencies[\"jsii-rosetta\"]) | .peerDependencies[\"@omarqureshi/jsii-rosetta\"] = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
+          npm publish
+          cd ..
 
       - name: Publish jsii-ruby-runtime (RubyGem)
         working-directory: jsii/packages/@jsii/ruby-runtime
