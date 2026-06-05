@@ -145,7 +145,7 @@ class BlogStack < AWSCDK::Stack
   end
 
   def create_api_gateway
-    AWSCDK::AWSAPIGateway::RestApi.new(
+    AWSCDK::AWSAPIGateway::RestAPI.new(
       self,
       'AnalyticsApi', {
         rest_api_name: 'Blog Analytics API',
