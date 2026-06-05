@@ -70,12 +70,12 @@ class BlogStack < AWSCDK::Stack
 
   # Request an ACM Certificate
   def create_certificate
-    AWSCDK::AWSCertificatemanager::Certificate.new(
+    AWSCDK::AWSCertificateManager::Certificate.new(
       self,
       'SiteCertificate',
       {
         domain_name: DOMAIN,
-        validation: AWSCDK::AWSCertificatemanager::CertificateValidation.from_dns(zone)
+        validation: AWSCDK::AWSCertificateManager::CertificateValidation.from_dns(zone)
       }
     )
   end
@@ -201,7 +201,7 @@ class BlogStack < AWSCDK::Stack
   end
 
   def create_distribution
-    AWSCDK::AWSCloudfront::CloudFrontWebDistribution.new(
+    AWSCDK::AWSCloudFront::CloudFrontWebDistribution.new(
       self,
       'SiteDistribution', {
         logging_config: {
@@ -209,37 +209,37 @@ class BlogStack < AWSCDK::Stack
           include_cookies: false
         },
         origin_configs: [
-          AWSCDK::AWSCloudfront::SourceConfiguration.new(
-            custom_origin_source: AWSCDK::AWSCloudfront::CustomOriginConfig.new(
+          AWSCDK::AWSCloudFront::SourceConfiguration.new(
+            custom_origin_source: AWSCDK::AWSCloudFront::CustomOriginConfig.new(
               domain_name: "#{api.rest_api_id}.execute-api.#{region}.amazonaws.com",
               origin_path: '/prod',
-              origin_protocol_policy: AWSCDK::AWSCloudfront::OriginProtocolPolicy::HTTPS_ONLY
+              origin_protocol_policy: AWSCDK::AWSCloudFront::OriginProtocolPolicy::HTTPS_ONLY
             ),
             behaviors: [
-              AWSCDK::AWSCloudfront::Behavior.new(
+              AWSCDK::AWSCloudFront::Behavior.new(
                 path_pattern: '/api/*',
-                allowed_methods: AWSCDK::AWSCloudfront::CloudFrontAllowedMethods::ALL,
-                forwarded_values: AWSCDK::AWSCloudfront::CfnDistribution::ForwardedValuesProperty.new(
+                allowed_methods: AWSCDK::AWSCloudFront::CloudFrontAllowedMethods::ALL,
+                forwarded_values: AWSCDK::AWSCloudFront::CfnDistribution::ForwardedValuesProperty.new(
                   query_string: true,
                   headers: HEADERS
                 )
               )
             ]
           ),
-          AWSCDK::AWSCloudfront::SourceConfiguration.new(
-            custom_origin_source: AWSCDK::AWSCloudfront::CustomOriginConfig.new(
+          AWSCDK::AWSCloudFront::SourceConfiguration.new(
+            custom_origin_source: AWSCDK::AWSCloudFront::CustomOriginConfig.new(
               domain_name: site_bucket.bucket_website_domain_name,
-              origin_protocol_policy: AWSCDK::AWSCloudfront::OriginProtocolPolicy::HTTP_ONLY
+              origin_protocol_policy: AWSCDK::AWSCloudFront::OriginProtocolPolicy::HTTP_ONLY
             ),
-            behaviors: [AWSCDK::AWSCloudfront::Behavior.new(is_default_behavior: true)]
+            behaviors: [AWSCDK::AWSCloudFront::Behavior.new(is_default_behavior: true)]
           )
         ],
-        viewer_certificate: AWSCDK::AWSCloudfront::ViewerCertificate.from_acm_certificate(
+        viewer_certificate: AWSCDK::AWSCloudFront::ViewerCertificate.from_acm_certificate(
           certificate,
           {
             aliases: [DOMAIN],
-            security_policy: AWSCDK::AWSCloudfront::SecurityPolicyProtocol::TLS_V1_2_2021,
-            ssl_method: AWSCDK::AWSCloudfront::SSLMethod::SNI
+            security_policy: AWSCDK::AWSCloudFront::SecurityPolicyProtocol::TLS_V1_2_2021,
+            ssl_method: AWSCDK::AWSCloudFront::SSLMethod::SNI
           }
         )
       }
