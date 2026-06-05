@@ -134,6 +134,7 @@ jobs:
           yarn config set npmScopes.omarqureshi.npmRegistryServer "https://npm.pkg.github.com"
           yarn config set npmScopes.omarqureshi.npmAuthToken "${NODE_AUTH_TOKEN}"
           jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .resolutions.jsii = \"file:../jsii-compiler/dist/js/jsii-0.0.0.tgz\" | .resolutions[\"jsii-rosetta\"] = \"file:../jsii-rosetta/dist/js/jsii-rosetta-0.0.0.tgz\"" package.json > tmp.json && mv tmp.json package.json
+          rm -f yarn.lock
           corepack enable
           yarn install --no-immutable
           yarn build
