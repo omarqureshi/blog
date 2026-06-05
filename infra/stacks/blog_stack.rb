@@ -115,13 +115,13 @@ class BlogStack < AWSCDK::Stack
   end
 
   def create_analytics_table
-    AWSCDK::AWSDynamodb::Table.new(
+    AWSCDK::AWSDynamoDB::Table.new(
       self,
       'BlogAnalytics',
       {
-        partition_key: { name: 'pk', type: AWSCDK::AWSDynamodb::AttributeType::STRING },
-        sort_key: { name: 'sk', type: AWSCDK::AWSDynamodb::AttributeType::STRING },
-        billing_mode: AWSCDK::AWSDynamodb::BillingMode::PAY_PER_REQUEST,
+        partition_key: { name: 'pk', type: AWSCDK::AWSDynamoDB::AttributeType::STRING },
+        sort_key: { name: 'sk', type: AWSCDK::AWSDynamoDB::AttributeType::STRING },
+        billing_mode: AWSCDK::AWSDynamoDB::BillingMode::PAY_PER_REQUEST,
         removal_policy: AWSCDK::RemovalPolicy::DESTROY # Safe to destroy for blog
       }
     )
@@ -145,13 +145,13 @@ class BlogStack < AWSCDK::Stack
   end
 
   def create_api_gateway
-    AWSCDK::AWSApigateway::RestApi.new(
+    AWSCDK::AWSApiGateway::RestApi.new(
       self,
       'AnalyticsApi', {
         rest_api_name: 'Blog Analytics API',
         default_cors_preflight_options: {
-          allow_origins: AWSCDK::AWSApigateway::Cors.ALL_ORIGINS,
-          allow_methods: AWSCDK::AWSApigateway::Cors.ALL_METHODS
+          allow_origins: AWSCDK::AWSApiGateway::Cors.ALL_ORIGINS,
+          allow_methods: AWSCDK::AWSApiGateway::Cors.ALL_METHODS
         }
       }
     )
@@ -166,7 +166,7 @@ class BlogStack < AWSCDK::Stack
   end
 
   def create_authorizer
-    AWSCDK::AWSApigateway::CognitoUserPoolsAuthorizer.new(
+    AWSCDK::AWSApiGateway::CognitoUserPoolsAuthorizer.new(
       self,
       'AdminAuthorizer',
       {
@@ -189,13 +189,13 @@ class BlogStack < AWSCDK::Stack
     api_resource = api.root.add_resource('api')
     # POST /api/track (Public Tracking Endpoint)
     api_resource.add_resource('track').add_method(
-      'POST', AWSCDK::AWSApigateway::LambdaIntegration.new(analytics_lambda)
+      'POST', AWSCDK::AWSApiGateway::LambdaIntegration.new(analytics_lambda)
     )
     # GET /api/analytics (Protected Dashboard Endpoint)
     api_resource.add_resource('analytics').add_method(
-      'GET', AWSCDK::AWSApigateway::LambdaIntegration.new(analytics_lambda), {
+      'GET', AWSCDK::AWSApiGateway::LambdaIntegration.new(analytics_lambda), {
         authorizer: authorizer,
-        authorization_type: AWSCDK::AWSApigateway::AuthorizationType::COGNITO
+        authorization_type: AWSCDK::AWSApiGateway::AuthorizationType::COGNITO
       }
     )
   end
