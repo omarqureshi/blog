@@ -112,6 +112,7 @@ jobs:
           jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           corepack enable
           yarn install --no-immutable
+          npx projen pre-compile
           npx projen compile
           mkdir -p dist/js
           npm pack
@@ -126,6 +127,7 @@ jobs:
           jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .resolutions.jsii = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           corepack enable
           yarn install --no-immutable
+          npx projen pre-compile
           npx projen compile
           mkdir -p dist/js
           npm pack
@@ -141,6 +143,7 @@ jobs:
           rm -f yarn.lock
           corepack enable
           yarn install --no-immutable
+          npx projen pre-compile
           npx projen compile
           jq ".name = \"@omarqureshi/jsii-docgen\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | del(.peerDependencies[\"jsii-rosetta\"]) | .peerDependencies[\"@omarqureshi/jsii-rosetta\"] = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           npm publish
