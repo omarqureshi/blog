@@ -112,8 +112,10 @@ jobs:
           jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           corepack enable
           yarn install --no-immutable
-          yarn build
-          yarn package
+          npx projen compile
+          mkdir -p dist/js
+          npm pack
+          mv jsii-0.0.0.tgz dist/js/jsii-0.0.0.tgz
           jq ".name = \"@omarqureshi/jsii\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           npm publish
 
@@ -124,8 +126,10 @@ jobs:
           jq ".resolutions[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .resolutions.jsii = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           corepack enable
           yarn install --no-immutable
-          yarn build
-          yarn package
+          npx projen compile
+          mkdir -p dist/js
+          npm pack
+          mv jsii-rosetta-0.0.0.tgz dist/js/jsii-rosetta-0.0.0.tgz
           jq ".name = \"@omarqureshi/jsii-rosetta\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | .dependencies[\"jsii\"] = \"npm:@omarqureshi/jsii@${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           npm publish
 
@@ -137,7 +141,7 @@ jobs:
           rm -f yarn.lock
           corepack enable
           yarn install --no-immutable
-          yarn build
+          npx projen compile
           jq ".name = \"@omarqureshi/jsii-docgen\" | .version = \"${{ env.NPM_VERSION }}\" | .publishConfig = {\"registry\": \"https://npm.pkg.github.com\"} | .dependencies[\"@jsii/spec\"] = \"npm:@omarqureshi/jsii-spec@${{ env.NPM_VERSION }}\" | del(.peerDependencies[\"jsii-rosetta\"]) | .peerDependencies[\"@omarqureshi/jsii-rosetta\"] = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           npm publish
 
