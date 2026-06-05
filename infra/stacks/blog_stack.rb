@@ -70,12 +70,12 @@ class BlogStack < AWSCDK::Stack
 
   # Request an ACM Certificate
   def create_certificate
-    AWSCDK::AWSCertificatemanager::Certificate.new(
+    AWSCDK::AWSCertificateManager::Certificate.new(
       self,
       'SiteCertificate',
       {
         domain_name: DOMAIN,
-        validation: AWSCDK::AWSCertificatemanager::CertificateValidation.from_dns(zone)
+        validation: AWSCDK::AWSCertificateManager::CertificateValidation.from_dns(zone)
       }
     )
   end
