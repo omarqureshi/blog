@@ -90,6 +90,7 @@ jobs:
       - name: Build JSII
         working-directory: jsii
         run: |
+          yarn config set npmScopes.omarqureshi.npmAuthToken "${NODE_AUTH_TOKEN}"
           corepack enable
           yarn install
           yarn build
