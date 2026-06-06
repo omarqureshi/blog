@@ -16,42 +16,42 @@ jobs:
       NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout JSII
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: omarqureshi/jsii
           ref: ruby-language-bindings
           path: jsii
 
       - name: Checkout Constructs
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: aws/constructs
           ref: 10.x
           path: constructs
 
       - name: Checkout AWS CDK
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: omarqureshi/aws-cdk
           ref: ruby-language-bindings
           path: aws-cdk
 
       - name: Checkout JSII Compiler
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: omarqureshi/jsii-compiler
           ref: ruby-language-bindings
           path: jsii-compiler
 
       - name: Checkout JSII Rosetta
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: omarqureshi/jsii-rosetta
           ref: ruby-language-bindings
           path: jsii-rosetta
 
       - name: Checkout JSII Docgen
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: omarqureshi/jsii-docgen
           ref: ruby-language-bindings
@@ -59,7 +59,7 @@ jobs:
 
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
           registry-url: 'https://npm.pkg.github.com'
