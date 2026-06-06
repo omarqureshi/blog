@@ -172,6 +172,8 @@ jobs:
 
       - name: Publish AWS CDK (RubyGems)
         working-directory: aws-cdk
+        env:
+          TS_NODE_TRANSPILE_ONLY: 'true'
         run: |
           corepack enable
 
