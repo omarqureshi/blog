@@ -19,7 +19,10 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: omarqureshi/jsii
-          ref: ruby-language-bindings
+          # The working branch (fork-compiler scaffolding included); the plain
+          # ruby-language-bindings branch is the upstream-facing review artifact
+          # and does not install on its own.
+          ref: ruby-language-bindings-self-publish
           path: jsii
 
       - name: Checkout Constructs
@@ -68,7 +71,7 @@ jobs:
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.2'
+          ruby-version: '3.3'
 
       - name: Authenticate RubyGems
         run: |
