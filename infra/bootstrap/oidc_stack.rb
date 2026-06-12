@@ -43,7 +43,7 @@ class OIDCStack < AWSCDK::Stack
     # The thumbprint is required but can be the default GitHub thumbprints.
     # Note: AWS CDK typically manages these natively if you use standard providers,
     # but we can explicitly define it for GitHub Actions.
-    AWSCDK::AWSIAM::OpenIdConnectProvider.new(
+    AWSCDK::IAM::OpenIdConnectProvider.new(
       self,
       'GitHubOIDCProvider',
       {
@@ -55,11 +55,11 @@ class OIDCStack < AWSCDK::Stack
   end
 
   def create_role(provider)
-    AWSCDK::AWSIAM::Role.new(
+    AWSCDK::IAM::Role.new(
       self,
       'GitHubActionsDeployRole', {
         role_name: 'GitHubActionsCDKRole',
-        assumed_by: AWSCDK::AWSIAM::OpenIdConnectPrincipal.new(provider, PROVIDER_POLICY),
+        assumed_by: AWSCDK::IAM::OpenIdConnectPrincipal.new(provider, PROVIDER_POLICY),
         description: 'Role assumed by GitHub Actions to deploy the Blog CDK stack'
       }
     )
@@ -68,6 +68,6 @@ class OIDCStack < AWSCDK::Stack
     # provisioning arbitrary resources (S3, CloudFront, ACM, IAM Roles for
     # custom resources), AdministratorAccess is typically required for the CI/CD
     # role deploying CDK.
-    role.add_managed_policy(AWSCDK::AWSIAM::ManagedPolicy.from_aws_managed_policy_name('AdministratorAccess'))
+    role.add_managed_policy(AWSCDK::IAM::ManagedPolicy.from_aws_managed_policy_name('AdministratorAccess'))
   end
 end
