@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: omarqureshi/aws-cdk
-          ref: ruby-language-bindings
+          ref: ruby-language-bindings-self-publish
           path: aws-cdk
 
       - name: Checkout JSII Compiler
