@@ -13,6 +13,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: production # exposes the AWS_ACCOUNT_ID environment secret used for the S3 publish
     env:
       NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
