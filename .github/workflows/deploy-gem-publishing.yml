@@ -41,7 +41,7 @@ jobs:
         run: |
           bundle config set --local path 'vendor/bundle'
           bundle install
-          bundle update jsii-ruby-runtime constructs aws-cdk-lib
+          bundle update jsii-ruby-runtime constructs aws-cdk-lib aws-cdk-asset-awscli-v1 aws-cdk-asset-node-proxy-agent-v6 aws-cdk-cloud-assembly-schema
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6

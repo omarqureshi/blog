@@ -6,6 +6,9 @@ source 'https://rubygems.org'
 # provisions it still consumes the Ruby CDK gems from GitHub Packages. Once the
 # bucket is live, this source can point at it instead.
 source 'https://rubygems.pkg.github.com/omarqureshi' do
+  gem 'aws-cdk-asset-awscli-v1', '>= 0.0.0.pre', require: false
+  gem 'aws-cdk-asset-node-proxy-agent-v6', '>= 0.0.0.pre', require: false
+  gem 'aws-cdk-cloud-assembly-schema', '>= 0.0.0.pre', require: false
   gem 'aws-cdk-lib', '>= 0.0.0.pre', require: false
   gem 'constructs', '>= 0.0.0.pre', require: false
   gem 'jsii-ruby-runtime', '>= 0.0.0.pre'
