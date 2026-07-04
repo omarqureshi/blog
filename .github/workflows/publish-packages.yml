@@ -8,6 +8,7 @@ on:
 permissions:
   packages: write
   contents: read
+  id-token: write # OIDC to assume the AWS role that publishes gems to the public S3 bucket
 
 jobs:
   publish:
@@ -254,3 +255,37 @@ jobs:
           ls -la
           gem spec *.gem
           gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
+
+      # ---------------------------------------------------------------------------
+      # Publish the same gems to a public S3 bucket serving a static RubyGems repo,
+      # so consumers can install with no PAT:  source "https://aws-cdk-ruby-gems.s3.us-east-1.amazonaws.com"
+      # (This runs alongside the GitHub Packages push above during migration.)
+      # ---------------------------------------------------------------------------
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKRole
+          aws-region: us-east-1
+
+      - name: Publish gems to public S3 bucket
+        run: |
+          set -euo pipefail
+          BUCKET=aws-cdk-ruby-gems
+          REPO_DIR="$GITHUB_WORKSPACE/gem-repo"
+          mkdir -p "$REPO_DIR/gems"
+
+          # Pull the existing gems down first so the regenerated index retains prior versions.
+          aws s3 sync "s3://$BUCKET/gems/" "$REPO_DIR/gems/" --no-progress
+
+          # Collect every freshly-built .gem (jsii-ruby-runtime + all dist/ruby outputs).
+          find "$GITHUB_WORKSPACE" \( -path '*/dist/ruby/*.gem' -o -path '*/ruby-runtime/*.gem' \) \
+            -exec cp -f {} "$REPO_DIR/gems/" \;
+          echo "Total gems in repository: $(ls "$REPO_DIR/gems" | wc -l)"
+
+          # generate_index (legacy static index) is a plugin in modern RubyGems.
+          gem install rubygems-generate_index --no-document
+          gem generate_index --directory "$REPO_DIR"
+
+          # Upload gems + index. Public read is granted by the bucket policy (no object ACLs).
+          aws s3 sync "$REPO_DIR/" "s3://$BUCKET/" --no-progress
+          echo "Published to https://$BUCKET.s3.us-east-1.amazonaws.com"
