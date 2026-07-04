@@ -1,0 +1,57 @@
+name: Deploy Gem Publishing Infra
+
+# Provisions the public S3 bucket that hosts the Ruby gems (see infra/gem-publishing).
+# Manual trigger only — it creates/updates infrastructure.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write # Required for the OIDC JWT
+  contents: read # Required for actions/checkout
+  packages: read # Required to download the CDK gems from GitHub Packages
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+
+      - name: Install CDK CLI + jsii runtime sidecar
+        working-directory: infra/gem-publishing
+        run: |
+          npm install -g aws-cdk
+          npm install
+
+      - name: Fetch CDK gems
+        working-directory: infra/gem-publishing
+        env:
+          BUNDLE_RUBYGEMS__PKG__GITHUB__COM: omarqureshi:${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bundle config set --local path 'vendor/bundle'
+          bundle install
+          bundle update jsii-ruby-runtime constructs aws-cdk-lib
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKRole
+          aws-region: us-east-1
+
+      - name: Deploy CDK Stack
+        working-directory: infra/gem-publishing
+        env:
+          BUNDLE_RUBYGEMS__PKG__GITHUB__COM: omarqureshi:${{ secrets.GITHUB_TOKEN }}
+          JSII_RUNTIME: ${{ github.workspace }}/infra/gem-publishing/node_modules/@jsii/runtime/bin/jsii-runtime
+        run: bundle exec cdk deploy --require-approval never

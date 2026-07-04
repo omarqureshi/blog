@@ -1,0 +1,8 @@
+{
+  "name": "gem-publishing-infra",
+  "private": true,
+  "description": "Provides the @jsii/runtime Node sidecar for the Ruby CDK app that provisions the public gem bucket.",
+  "dependencies": {
+    "@jsii/runtime": "latest"
+  }
+}

@@ -1,0 +1,14 @@
+# frozen_string_literal: true
+
+source 'https://rubygems.org'
+
+# Bootstrap dependency: while the gem bucket does not yet exist, the CDK app that
+# provisions it still consumes the Ruby CDK gems from GitHub Packages. Once the
+# bucket is live, this source can point at it instead.
+source 'https://rubygems.pkg.github.com/omarqureshi' do
+  gem 'aws-cdk-lib', '>= 0.0.0.pre', require: false
+  gem 'constructs', '>= 0.0.0.pre', require: false
+  gem 'jsii-ruby-runtime', '>= 0.0.0.pre'
+end
+
+gem 'rubocop', require: false
