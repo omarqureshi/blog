@@ -39,6 +39,23 @@ jobs:
           ref: ruby-language-bindings-self-publish
           path: aws-cdk
 
+      # Guard: an upstream rebase that resolves the aws-cdk-lib/package.json conflict with
+      # `--ours` silently drops jsii.targets.ruby (module + acronyms). Without acronyms, the
+      # generator renders class names like RestApi instead of RestAPI, which breaks consumers
+      # (e.g. the blog stack). Fail the publish loudly rather than shipping a broken gem.
+      - name: Validate aws-cdk-lib Ruby acronyms
+        working-directory: aws-cdk
+        run: |
+          node -e '
+            const ruby = require("./packages/aws-cdk-lib/package.json").jsii?.targets?.ruby;
+            const n = ruby?.acronyms?.length ?? 0;
+            if (!ruby?.module || n === 0) {
+              console.error("::error::aws-cdk-lib/package.json is missing jsii.targets.ruby.acronyms — a rebase likely dropped the ruby target. Restore it before publishing (class names lose acronym casing otherwise).");
+              process.exit(1);
+            }
+            console.log(`aws-cdk-lib ruby target OK: module=${ruby.module}, ${n} acronyms`);
+          '
+
       - name: Checkout JSII Compiler
         uses: actions/checkout@v6
         with:
