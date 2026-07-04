@@ -3,55 +3,97 @@
 require 'aws-cdk-lib'
 
 # Hosts the Ruby gems we build (jsii-ruby-runtime, constructs, aws-cdk-lib and the
-# per-service aws-cdk-lib gems) in a public, unauthenticated S3 bucket that serves a
-# static RubyGems repository. Consumers point `gem`/Bundler at the bucket's HTTPS REST
-# endpoint and need no Personal Access Token:
+# per-service aws-cdk-lib gems) as a static RubyGems repository, served over a clean,
+# unauthenticated custom domain via CloudFront:
 #
 #   # Gemfile
-#   source "https://aws-cdk-ruby-gems.s3.us-east-1.amazonaws.com"
+#   source "https://rubygems.omarqureshi.net"
 #
-# The publish pipeline uploads `.gem` files plus a `gem generate_index` index to this
-# bucket, replacing the GitHub Packages RubyGems feed (which requires auth to read).
+# The gems live in a private S3 bucket (CloudFront-only access via Origin Access
+# Control); consumers only ever hit CloudFront, need no Personal Access Token, and get
+# TLS + edge caching for free. The publish pipeline uploads `.gem` files plus a
+# `gem generate_index` index to the bucket and invalidates the CloudFront cache.
 class GemPublishingStack < AWSCDK::Stack
   BUCKET_NAME = 'aws-cdk-ruby-gems'
+  DOMAIN_NAME = 'rubygems.omarqureshi.net'
+  HOSTED_ZONE = 'omarqureshi.net'
+  RECORD_NAME = 'rubygems'
 
   def initialize(scope, id, props = nil)
     super(scope, id, props)
 
     @bucket = create_gem_bucket
+    @zone = AWSCDK::Route53::HostedZone.from_lookup(self, 'Zone', { domain_name: HOSTED_ZONE })
+    @certificate = create_certificate
+    @distribution = create_distribution
+    create_dns_records
 
     AWSCDK::CfnOutput.new(self, 'GemBucketName', { value: @bucket.bucket_name })
+    AWSCDK::CfnOutput.new(self, 'DistributionId', { value: @distribution.distribution_id })
     AWSCDK::CfnOutput.new(
       self,
       'GemSourceUrl',
-      {
-        value: "https://#{@bucket.bucket_name}.s3.#{region}.amazonaws.com",
-        description: 'RubyGems source URL — use with `gem install --source <url>` or a Gemfile `source`'
-      }
+      { value: "https://#{DOMAIN_NAME}", description: 'RubyGems source URL — use in a Gemfile `source`' }
     )
   end
 
   private
 
-  # A public-read bucket served over its HTTPS REST endpoint. Public access is granted
-  # solely via a bucket POLICY (public ACLs stay blocked); TLS is enforced; and the
-  # bucket is retained so already-published gems survive a stack teardown.
+  # Private bucket — read access is only through CloudFront (Origin Access Control);
+  # writes come from the authenticated publish pipeline. TLS enforced; retained so
+  # published gems survive a stack teardown.
   def create_gem_bucket
     AWSCDK::S3::Bucket.new(
       self,
       'GemBucket',
       {
         bucket_name: BUCKET_NAME,
-        public_read_access: true,
-        block_public_access: AWSCDK::S3::BlockPublicAccess.new(
-          block_public_acls: true,
-          ignore_public_acls: true,
-          block_public_policy: false,
-          restrict_public_buckets: false
-        ),
+        block_public_access: AWSCDK::S3::BlockPublicAccess.BLOCK_ALL,
         enforce_ssl: true,
         removal_policy: AWSCDK::RemovalPolicy::RETAIN
       }
     )
+  end
+
+  # DNS-validated ACM certificate for the custom domain. Must be in us-east-1 for
+  # CloudFront — this stack already deploys there.
+  def create_certificate
+    AWSCDK::CertificateManager::Certificate.new(
+      self,
+      'Certificate',
+      {
+        domain_name: DOMAIN_NAME,
+        validation: AWSCDK::CertificateManager::CertificateValidation.from_dns(@zone)
+      }
+    )
+  end
+
+  def create_distribution
+    origin = AWSCDK::CloudFrontOrigins::S3BucketOrigin.with_origin_access_control(@bucket)
+
+    AWSCDK::CloudFront::Distribution.new(
+      self,
+      'Distribution',
+      {
+        comment: 'Public RubyGems repository for the AWS CDK Ruby bindings',
+        domain_names: [DOMAIN_NAME],
+        certificate: @certificate,
+        default_behavior: {
+          origin: origin,
+          viewer_protocol_policy: AWSCDK::CloudFront::ViewerProtocolPolicy::REDIRECT_TO_HTTPS,
+          # .gem files are immutable (versioned names); the index files are cheap and get
+          # invalidated on publish, so an optimized cache policy is safe.
+          cache_policy: AWSCDK::CloudFront::CachePolicy.CACHING_OPTIMIZED
+        }
+      }
+    )
+  end
+
+  def create_dns_records
+    target = AWSCDK::Route53::RecordTarget.from_alias(
+      AWSCDK::Route53Targets::CloudFrontTarget.new(@distribution)
+    )
+    AWSCDK::Route53::ARecord.new(self, 'AliasA', { zone: @zone, record_name: RECORD_NAME, target: target })
+    AWSCDK::Route53::AaaaRecord.new(self, 'AliasAaaa', { zone: @zone, record_name: RECORD_NAME, target: target })
   end
 end

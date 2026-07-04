@@ -286,6 +286,18 @@ jobs:
           gem install rubygems-generate_index --no-document
           gem generate_index --directory "$REPO_DIR"
 
-          # Upload gems + index. Public read is granted by the bucket policy (no object ACLs).
+          # Upload gems + index to the bucket (private; served via CloudFront).
           aws s3 sync "$REPO_DIR/" "s3://$BUCKET/" --no-progress
-          echo "Published to https://$BUCKET.s3.us-east-1.amazonaws.com"
+
+          # Invalidate the CloudFront cache so consumers see the fresh index immediately.
+          # Tolerant of the distribution not existing yet (e.g. before the infra is deployed).
+          DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Aliases.Items[?@=='rubygems.omarqureshi.net']].Id | [0]" \
+            --output text 2>/dev/null || true)
+          if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
+            aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths '/*' >/dev/null
+            echo "Invalidated CloudFront distribution $DIST_ID"
+          else
+            echo "No CloudFront distribution for rubygems.omarqureshi.net yet; skipping invalidation."
+          fi
+          echo "Published to https://rubygems.omarqureshi.net"
