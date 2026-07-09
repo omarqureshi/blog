@@ -253,8 +253,7 @@ class BlogStack < AWSCDK::Stack
       {
         record_name: DOMAIN,
         target: AWSCDK::Route53::RecordTarget.from_alias(AWSCDK::Route53Targets::CloudFrontTarget.new(distribution)),
-        zone: zone,
-        delete_existing: true
+        zone: zone
       }
     )
   end
