@@ -18,16 +18,15 @@ Prefer to watch? Here's a walkthrough:
 - **Node.js**. The Ruby bindings talk to the jsii kernel — a small Node sidecar (`@jsii/runtime`) — over a JSON protocol. You never write Node, but it has to be on the machine.
 - **The CDK CLI**, installed from npm: `npm install -g aws-cdk`.
 
-## The gems are served over a plain URL — no PAT
+## Public Ruby Gems
 
-The Ruby gems (`aws-cdk-lib`, `constructs`, `jsii-ruby-runtime`, and the asset helpers) are published to a standard RubyGems repository, served over CloudFront at `https://rubygems.omarqureshi.net`. That means **you point Bundler at a URL and install**
+The Ruby gems (`aws-cdk-lib`, `constructs`, `jsii-ruby-runtime`, and the asset helpers) are published to a RubyGems repository at `https://rubygems.omarqureshi.net`
 
 ## Gemfile
 
 ```ruby
 source 'https://rubygems.org'
 
-# The AWS CDK Ruby gems (no auth required).
 source 'https://rubygems.omarqureshi.net' do
   gem 'aws-cdk-lib', '>= 0.0.0.pre'
   gem 'constructs', '>= 0.0.0.pre'
@@ -82,7 +81,7 @@ These are the conventions you'll rely on everywhere:
 - **AWS acronyms are uppercased — in class names too.** This is the surprising one if you're coming from another CDK language. `RestApi` becomes `AWSCDK::APIGateway::RestAPI`; `HttpApi` becomes `AWSCDK::APIGatewayv2::HttpAPI`; `FunctionUrl` becomes `AWSCDK::Lambda::FunctionURL`. The Ruby target runs an AWS acronym list over the identifiers, so `…Api`/`…Url`/`…Arn` render as `…API`/`…URL`/`…ARN`.
 - **Props** are a Ruby `Hash` with **snake_case keys** — `removal_policy:`, not `removalPolicy:`.
 - **Enums** are constants under `::`: `AWSCDK::RemovalPolicy::DESTROY`.
-- **"Enum-like" static constants** are method calls with a `.`: `AWSCDK::Lambda::Runtime.RUBY_4_0`, `AWSCDK::S3::BlockPublicAccess.BLOCK_ALL`.
+- **Static properties** are method calls with a `.`: `AWSCDK::Lambda::Runtime.RUBY_4_0`, `AWSCDK::S3::BlockPublicAccess.BLOCK_ALL`.
 
 You can play with the code by using irb and the autocompletion with
 
