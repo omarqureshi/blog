@@ -1,0 +1,84 @@
+name: Publish Ruby CDK Docs
+
+# Builds the aws-cdk-lib Ruby API docs (YARD per-module + assembly-driven index)
+# and syncs them to the public gem bucket under /docs. Independent of gem publishing:
+# it consumes the already-published gem from the feed, so it never rebuilds the CDK.
+#
+# NOTE: scripts live in docs-gen/ for now; the intent is to move them into
+# omarqureshi/jsii-rosetta (the doc/example toolchain) once stable.
+
+on:
+  workflow_dispatch:
+    inputs:
+      modules:
+        description: 'Module dirs to build (space-separated). Empty = all ~327 modules (~1h).'
+        required: false
+        default: 's3 lambda dynamo_db sqs sns kms'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout blog (docs-gen scripts)
+        uses: actions/checkout@v6
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'   # YARD only parses the source (no gem load), so 3.3 is fine
+
+      - name: Install YARD
+        run: gem install yard --no-document   # YARD's own highlighter; rouge not needed
+
+      - name: Download & extract aws-cdk-lib from the feed
+        run: |
+          set -euo pipefail
+          FEED=https://rubygems.omarqureshi.net
+          V=$(ruby -e 'require "zlib"; require "open-uri"; require "stringio"; \
+            d=URI.open("'"$FEED"'/prerelease_specs.4.8.gz").read; \
+            s=Marshal.load(Zlib::GzipReader.new(StringIO.new(d)).read); \
+            puts s.select{|n,_,_| n=="aws-cdk-lib"}.map{|_,v,_| v.to_s}.sort.last')
+          echo "aws-cdk-lib version: $V"
+          mkdir -p gem && cd gem
+          curl -fsSL "$FEED/gems/aws-cdk-lib-$V.gem" -o g.gem
+          tar xf g.gem && tar xzf data.tar.gz
+          mkdir -p asm && tar xzf lib/aws-cdk-lib@*.jsii.tgz -C asm
+          echo "GEM_LIB=$PWD/lib/aws-cdk-lib"          >> "$GITHUB_ENV"
+          echo "ASSEMBLY=$PWD/asm/package/.jsii.gz"     >> "$GITHUB_ENV"
+
+      - name: Build docs site
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/docs"
+          rm -rf "$OUT"; mkdir -p "$OUT"
+          bash docs-gen/build-module-docs.sh "$GEM_LIB" "$OUT" ${{ github.event.inputs.modules }}
+          ruby docs-gen/inject-crumb.rb        "$OUT"
+          ruby docs-gen/gen-module-landing.rb  "$ASSEMBLY" "$OUT"
+          ruby docs-gen/gen-index.rb           "$ASSEMBLY" "$OUT"
+          echo "DOCS_OUT=$OUT" >> "$GITHUB_ENV"
+          echo "built $(find "$OUT/AWSCDK" -maxdepth 1 -type d | wc -l) module dirs"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKRole
+          aws-region: us-east-1
+
+      - name: Sync to S3 + invalidate CloudFront
+        run: |
+          set -euo pipefail
+          aws s3 sync "$DOCS_OUT" s3://aws-cdk-ruby-gems/docs/ --delete --no-progress
+          DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?contains(Aliases.Items, 'rubygems.omarqureshi.net')].Id | [0]" \
+            --output text)
+          if [ "$DIST_ID" != "None" ] && [ -n "$DIST_ID" ]; then
+            aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths '/docs/*' >/dev/null
+            echo "invalidated /docs/* on $DIST_ID"
+          else
+            echo "no CloudFront distribution for rubygems.omarqureshi.net; skipping invalidation"
+          fi
