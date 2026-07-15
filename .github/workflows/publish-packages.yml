@@ -188,7 +188,7 @@ jobs:
           jq '.jsii.targets.ruby = {"gem": "constructs", "module": "Constructs"}' package.json > tmp.json && mv tmp.json package.json
           jq ".version = \"${{ env.NPM_VERSION }}\" | .targets.ruby = {\"gem\": \"constructs\", \"module\": \"Constructs\"}" .jsii > tmp.jsii && mv tmp.jsii .jsii
           rm -rf dist/ruby
-          node ../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
+          node ../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --rosetta-unknown-snippets translate --force-target -- .
           cd dist/ruby
           gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
 
@@ -228,7 +228,7 @@ jobs:
               echo '{"schema":"jsii/file-redirect","compression":"gzip","filename":".jsii.gz"}' > .jsii
             fi
             rm -rf dist/ruby
-            node $ROOT_DIR/../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
+            node $ROOT_DIR/../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --rosetta-unknown-snippets translate --force-target -- .
             cd dist/ruby
             gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
           done
@@ -251,7 +251,7 @@ jobs:
           rm -rf dist/ruby
           grep '"version"' package.json
           grep '"version"' .jsii || echo "No version in .jsii!"
-          node $ROOT_DIR/../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --force-target -- .
+          node $ROOT_DIR/../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --rosetta-unknown-snippets translate --force-target -- .
           cd dist/ruby
           ls -la
           gem spec *.gem
