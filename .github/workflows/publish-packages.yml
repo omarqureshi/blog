@@ -109,12 +109,38 @@ jobs:
           echo "NPM_VERSION=0.0.0-$TIMESTAMP" >> $GITHUB_ENV
           echo "GEM_VERSION=0.0.0.pre.$TIMESTAMP" >> $GITHUB_ENV
 
+      # Build the Ruby-supporting rosetta fork into a tgz FIRST, so the jsii build
+      # below can resolve jsii-rosetta to it. pacmak's ruby target references
+      # TargetLanguage.RUBY (compile time) and calls the Ruby visitor (when pacmak
+      # runs from the jsii checkout), so jsii — not just aws-cdk — must carry the fork.
+      # The fork's Ruby additions don't depend on the patched jsii/@jsii/spec, so it
+      # builds standalone against upstream deps.
+      - name: Build JSII Rosetta fork (tgz)
+        working-directory: jsii-rosetta
+        env:
+          YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
+        run: |
+          corepack enable
+          # Pin typescript to match jsii 6.x's toolchain.
+          jq '.resolutions.typescript = "6.0.3"' package.json > tmp.json && mv tmp.json package.json
+          yarn install --no-immutable
+          npx projen pre-compile
+          npx projen compile
+          mkdir -p dist/js
+          npm pack
+          mv jsii-rosetta-0.0.0.tgz dist/js/jsii-rosetta-0.0.0.tgz
+
       - name: Build JSII
         working-directory: jsii
+        env:
+          YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
         run: |
           corepack enable
           yarn config set npmScopes.omarqureshi.npmAuthToken "${NODE_AUTH_TOKEN}"
-          yarn install
+          # Resolve jsii-rosetta to the fork tgz so pacmak compiles and runs against a
+          # rosetta that knows TargetLanguage.RUBY.
+          jq '.resolutions["jsii-rosetta"] = "file:../jsii-rosetta/dist/js/jsii-rosetta-0.0.0.tgz"' package.json > tmp.json && mv tmp.json package.json
+          yarn install --no-immutable
           yarn build
 
       - name: Publish Patched NPM Packages to GitHub Packages
