@@ -209,6 +209,13 @@ jobs:
           env NODE_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }} yarn install
           npx lerna run build --scope aws-cdk-lib --include-dependencies
 
+          # Re-extract the Rosetta tablet with the fork (which supports Ruby) so
+          # aws-cdk-lib's .jsii.tabl.json gains Ruby translations. Extraction primes
+          # from the shipped tablet, so only the missing Ruby snippets are compiled;
+          # pacmak then reads this tablet automatically and emits validated Ruby
+          # @example blocks (the --rosetta-unknown-snippets flag stays as a fallback).
+          npx lerna run rosetta:extract --scope aws-cdk-lib
+
           # Publish nested dependencies
           ROOT_DIR=$PWD
           for pkg in asset-awscli-v1 asset-node-proxy-agent-v6 cloud-assembly-schema; do
