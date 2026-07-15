@@ -93,15 +93,9 @@ ruby_modules.sort.each do |rm|
   next if types.empty? && children[rm].empty?
 
   by_kind = types.group_by { |c| c[:kind] }
-  sections = SECTIONS.filter_map do |kind, label|
-    items = by_kind[kind]
-    next if items.nil? || items.empty?
+  sections = []
 
-    %(<h2 class="sec">#{label} <span class="ct">#{items.length}</span></h2>\n      #{render_rows.call(items)})
-  end
-  other = types.reject { |c| SECTIONS.map(&:first).include?(c[:kind]) }
-  sections << %(<h2 class="sec">Other <span class="ct">#{other.length}</span></h2>\n      #{render_rows.call(other)}) if other.any?
-
+  # Namespaces first — they're navigation, above the module's own types.
   unless children[rm].empty?
     ns_rows = children[rm].sort.map do |c|
       leaf = c.split('::').last
@@ -109,6 +103,15 @@ ruby_modules.sort.each do |rm|
     end.join("\n      ")
     sections << %(<h2 class="sec">Namespaces <span class="ct">#{children[rm].length}</span></h2>\n      #{ns_rows})
   end
+
+  SECTIONS.each do |kind, label|
+    items = by_kind[kind]
+    next if items.nil? || items.empty?
+
+    sections << %(<h2 class="sec">#{label} <span class="ct">#{items.length}</span></h2>\n      #{render_rows.call(items)})
+  end
+  other = types.reject { |c| SECTIONS.map(&:first).include?(c[:kind]) }
+  sections << %(<h2 class="sec">Other <span class="ct">#{other.length}</span></h2>\n      #{render_rows.call(other)}) if other.any?
 
   # Breadcrumb: AWSCDK / <seg> / ... / <current>, each linked to its own landing.
   crumb = [%(<a href="#{'../' * segs.length}index.html">AWSCDK</a>)]
