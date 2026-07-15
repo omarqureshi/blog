@@ -9,11 +9,6 @@ name: Publish Ruby CDK Docs
 
 on:
   workflow_dispatch:
-    inputs:
-      modules:
-        description: 'Module dirs to build (space-separated). Empty = all ~327 modules (~1h).'
-        required: false
-        default: 's3 lambda dynamo_db sqs sns kms'
 
 permissions:
   id-token: write
@@ -56,7 +51,7 @@ jobs:
           set -euo pipefail
           OUT="$RUNNER_TEMP/docs"
           rm -rf "$OUT"; mkdir -p "$OUT"
-          bash docs-gen/build-module-docs.sh "$GEM_LIB" "$OUT" ${{ github.event.inputs.modules }}
+          bash docs-gen/build-module-docs.sh "$GEM_LIB" "$OUT"   # no args = all modules
           ruby docs-gen/inject-crumb.rb        "$OUT"
           ruby docs-gen/gen-module-landing.rb  "$ASSEMBLY" "$OUT"
           ruby docs-gen/gen-index.rb           "$ASSEMBLY" "$OUT"

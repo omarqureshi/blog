@@ -86,11 +86,16 @@ class GemPublishingStack < AWSCDK::Stack
             if (uri === '/docs' || uri.indexOf('/docs/') === 0) {
               if (uri.charAt(uri.length - 1) === '/') {
                 request.uri = uri + 'index.html';
-              } else {
-                var last = uri.substring(uri.lastIndexOf('/') + 1);
-                if (last.indexOf('.') === -1) {
-                  request.uri = uri + '/index.html';
-                }
+                return request;
+              }
+              var last = uri.substring(uri.lastIndexOf('/') + 1);
+              if (last.indexOf('.') === -1) {
+                // Redirect to add the trailing slash so the page's relative links resolve.
+                return {
+                  statusCode: 301,
+                  statusDescription: 'Moved Permanently',
+                  headers: { location: { value: uri + '/' } }
+                };
               }
             }
             return request;
