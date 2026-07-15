@@ -1,9 +1,12 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 #
-# Inject a working breadcrumb into every YARD class page, replacing YARD's broken
-# frame nav (which is hidden by the theme). Paths are computed by depth so nested
-# pages (e.g. CfnTable/Prop) link correctly too.
+# Inject a full-path breadcrumb into every YARD class page, replacing YARD's broken
+# frame nav (hidden by the theme). Each intermediate segment links to the right place:
+# a namespace (has its own index.html landing) links to that landing; a class segment
+# (e.g. CfnTable, which has nested property types under it) links to the class page.
+#
+# Must run AFTER gen-module-landing.rb, so namespace landings exist for the check.
 #
 #   inject-crumb.rb <out-dir>
 out_dir = ARGV[0]
@@ -14,25 +17,29 @@ count = 0
 Dir.glob(File.join(awscdk, '**', '*.html')).each do |f|
   next if File.basename(f) == 'index.html'
 
-  rel = f.sub("#{awscdk}/", '')
-  comps = rel.split('/')
+  comps = f.sub("#{awscdk}/", '').split('/')   # [seg1, ..., segK, "Class.html"]
   next if comps.length < 2
 
-  mod = comps[0]
+  segs = comps[0..-2]                            # dir segments
+  k = segs.length
   cls = File.basename(f, '.html')
-  root_link = ('../' * (comps.length - 1)) + 'index.html'     # -> AWSCDK/index.html
-  mod_link  = ('../' * (comps.length - 2)) + 'index.html'     # -> AWSCDK/<mod>/index.html
 
-  crumb = %(<nav class="cdk-crumb">) +
-          %(<a href="#{root_link}">AWSCDK</a><span class="sep">/</span>) +
-          %(<a href="#{mod_link}">#{esc.call(mod)}</a><span class="sep">/</span>) +
-          %(<span class="cur">#{esc.call(cls)}</span></nav>)
+  parts = [%(<a href="#{'../' * k}index.html">AWSCDK</a>)]
+  segs.each_with_index do |seg, i|
+    seg_dir = File.join(awscdk, *segs[0..i])
+    link =
+      if File.exist?(File.join(seg_dir, 'index.html'))
+        ('../' * (k - 1 - i)) + 'index.html'      # namespace -> its landing
+      else
+        ('../' * (k - i)) + "#{seg}.html"          # class -> the class page (parent dir)
+      end
+    parts << %(<a href="#{link}">#{esc.call(seg)}</a>)
+  end
+  parts << %(<span class="cur">#{esc.call(cls)}</span>)
+  crumb = %(<nav class="cdk-crumb">#{parts.join('<span class="sep">/</span>')}</nav>)
 
   html = File.read(f)
-  # Remove any prior crumb (may be at the old body-child location) so this is re-runnable.
-  html = html.sub(%r{[ \t]*<nav class="cdk-crumb">.*?</nav>\n?}m, '')
-  # Inject INSIDE #main (the content column) — not as a child of <body>, which is a
-  # flex container (a body-child crumb becomes a flex sibling of #main -> layout gap).
+  html = html.sub(%r{[ \t]*<nav class="cdk-crumb">.*?</nav>\n?}m, '')  # re-runnable
   main_re = /(<[^>]*\bid="main"[^>]*>)/i
   next unless html =~ main_re
 

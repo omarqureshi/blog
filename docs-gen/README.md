@@ -19,9 +19,9 @@ index would be tens of MB). So each module is built in isolation and merged into
 | step | script | does |
 |------|--------|------|
 | 1 | `build-module-docs.sh <gem-lib> <out> [modules…]` | per-module YARD, merged; applies `docs-theme.css` |
-| 2 | `inject-crumb.rb <out>` | working breadcrumb into each class page; hides YARD's broken frame nav (via the theme) |
-| 3 | `gen-module-landing.rb <assembly> <out>` | `AWSCDK/<Module>/index.html` — classes/interfaces/enums, from the assembly |
-| 4 | `gen-index.rb <assembly> <out>` | `AWSCDK/index.html` (all modules) + `/` → `/AWSCDK/` redirect |
+| 2 | `gen-module-landing.rb <assembly> <out>` | a landing per submodule (incl. nested namespaces like `ECR/Mixins`) — classes/interfaces/enums + child namespaces |
+| 3 | `inject-crumb.rb <out>` | full-path breadcrumb into each class page (runs *after* landings so it can tell namespaces from classes); the theme hides YARD's broken frame nav |
+| 4 | `gen-index.rb <assembly> <out>` | `AWSCDK/index.html` (top-level modules only) + `/` → `/AWSCDK/` redirect |
 
 - **YARD** renders the class pages (with Ruby `@example` blocks from jsii-rosetta).
 - The **jsii assembly** (`.jsii`) drives the module list, names, and per-class kind/summary.
