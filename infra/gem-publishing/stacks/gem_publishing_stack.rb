@@ -71,6 +71,34 @@ class GemPublishingStack < AWSCDK::Stack
   def create_distribution
     origin = AWSCDK::CloudFrontOrigins::S3BucketOrigin.with_origin_access_control(@bucket)
 
+    # Directory-index behaviour for the docs site: resolve /docs, /docs/, /docs/AWSCDK,
+    # /docs/AWSCDK/... to the matching index.html. Scoped strictly to /docs so the gem
+    # feed (/gems/*.gem, /specs.4.8.gz, Bundler's /versions & /info/*, ...) is untouched.
+    dir_index = AWSCDK::CloudFront::Function.new(
+      self,
+      'DirIndex',
+      {
+        comment: 'Append index.html to /docs directory requests',
+        code: AWSCDK::CloudFront::FunctionCode.from_inline(<<~JS)
+          function handler(event) {
+            var request = event.request;
+            var uri = request.uri;
+            if (uri === '/docs' || uri.indexOf('/docs/') === 0) {
+              if (uri.charAt(uri.length - 1) === '/') {
+                request.uri = uri + 'index.html';
+              } else {
+                var last = uri.substring(uri.lastIndexOf('/') + 1);
+                if (last.indexOf('.') === -1) {
+                  request.uri = uri + '/index.html';
+                }
+              }
+            }
+            return request;
+          }
+        JS
+      }
+    )
+
     AWSCDK::CloudFront::Distribution.new(
       self,
       'Distribution',
@@ -81,6 +109,12 @@ class GemPublishingStack < AWSCDK::Stack
         default_behavior: {
           origin: origin,
           viewer_protocol_policy: AWSCDK::CloudFront::ViewerProtocolPolicy::REDIRECT_TO_HTTPS,
+          function_associations: [
+            {
+              function: dir_index,
+              event_type: AWSCDK::CloudFront::FunctionEventType::VIEWER_REQUEST
+            }
+          ],
           # .gem files are immutable (versioned names); the index files are cheap and get
           # invalidated on publish, so an optimized cache policy is safe.
           cache_policy: AWSCDK::CloudFront::CachePolicy.CACHING_OPTIMIZED
