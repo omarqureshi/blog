@@ -1,42 +1,33 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 #
-# Per-namespace landing pages -> <out>/AWSCDK/<Module>[/<Sub>...]/index.html
-# Every jsii submodule gets a landing: a top-level module (AWSCDK::S3) and any nested
-# namespace (AWSCDK::ECR::Mixins). Each lists its classes/interfaces/enums (grouped,
-# alphabetical) plus a "Namespaces" section linking to its child namespaces. Names +
-# links come from the YARD output; kind + one-line summary from the jsii assembly.
+# Per-namespace landing pages, driven by the YARD output tree (so it also covers
+# namespaces the assembly doesn't tag with a Ruby module — e.g. the ~280 per-service
+# sub-namespaces under `interfaces`). Walks AWSCDK/**: a subdir is a namespace unless
+# its sibling <X>.html is a "Class:" page (that's a class's nested-types dir, e.g.
+# CfnTable). Each landing lists child namespaces + classes/interfaces/enums. Kind and
+# summary come from the assembly where available, else the YARD page type.
 #
 #   gen-module-landing.rb <assembly.jsii(.gz)> <out-dir>
 require 'json'
 require 'zlib'
+require 'set'
 
 assembly_path, out_dir = ARGV
 awscdk = File.join(out_dir, 'AWSCDK')
 raw = File.binread(assembly_path)
 assembly = JSON.parse(raw[0, 2].bytes == [0x1f, 0x8b] ? Zlib.gunzip(raw) : raw)
 
-subs = assembly.fetch('submodules', {})
 norm = ->(s) { s.downcase.gsub(/[^a-z0-9]/, '') }
-
 ruby_mod = {}
-subs.each { |fqn, s| (rm = s.dig('targets', 'ruby', 'module')) && (ruby_mod[fqn] = rm) }
+assembly.fetch('submodules', {}).each { |fqn, s| (rm = s.dig('targets', 'ruby', 'module')) && (ruby_mod[fqn] = rm) }
 
-# Ruby module -> { normalized type name -> {kind, summary} }
 by_mod = Hash.new { |h, k| h[k] = {} }
 assembly.fetch('types', {}).each do |fqn, t|
   rm = ruby_mod[fqn.rpartition('.').first]
   next unless rm
 
   by_mod[rm][norm.call(fqn.rpartition('.').last)] = { kind: t['kind'], summary: t.dig('docs', 'summary') }
-end
-
-# parent ruby module -> child sub-namespace ruby modules (e.g. AWSCDK::ECR -> [AWSCDK::ECR::Mixins])
-ruby_modules = ruby_mod.values.uniq
-children = Hash.new { |h, k| h[k] = [] }
-ruby_modules.each do |rm|
-  parts = rm.split('::')
-  children[parts[0..-2].join('::')] << rm if parts.length > 2
 end
 
 esc = ->(s) { s.to_s.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;') }
@@ -64,6 +55,17 @@ STYLE = <<~CSS
   footer{margin-top:1.75rem;color:var(--muted);font-size:.82rem;border-top:1px solid var(--line);padding-top:1rem;text-align:center}
 CSS
 
+# YARD page kind from its <h1>: Class -> class; Module -> (jsii) interface; else nil.
+page_kind = lambda do |html_path|
+  return nil unless File.exist?(html_path)
+
+  head = File.read(html_path, 8192)   # <h1> sits after YARD's head; read enough to reach it
+  if head =~ /<h1>\s*Class:/ then 'class'
+  elsif head =~ /<h1>\s*Module:/ then 'interface'
+  end
+end
+class_page = ->(p) { page_kind.call(p) == 'class' }
+
 render_rows = lambda do |items|
   items.sort_by { |c| c[:name].downcase }.map do |c|
     summary = c[:summary] ? %(<span class="s">#{esc.call(c[:summary][0, 90])}</span>) : ''
@@ -72,38 +74,39 @@ render_rows = lambda do |items|
 end
 
 count = 0
-ruby_modules.sort.each do |rm|
-  segs = rm.split('::')[1..]                 # ["ECR"] or ["ECR", "Mixins"]
-  dir = File.join(awscdk, *segs)
-  next unless File.directory?(dir)
-
+process = lambda do |dir|
+  segs = dir.sub(%r{\A#{Regexp.escape(awscdk)}/?}, '').split('/').reject(&:empty?)
+  rm = (['AWSCDK'] + segs).join('::')
   info = by_mod[rm]
-  child_leaves = children[rm].map { |c| c.split('::').last }
+
+  # A subdir is a namespace unless it's a type's nested-types dir: excluded if the
+  # assembly knows a type by that name here (e.g. CfnTable), or its sibling <X>.html
+  # is a "Class:" page. Interface sub-namespaces (no assembly ruby.module) fall through.
+  child_ns = Dir.children(dir).select do |e|
+    File.directory?(File.join(dir, e)) &&
+      !info.key?(norm.call(e)) &&
+      !class_page.call(File.join(dir, "#{e}.html"))
+  end.sort
+  ns_set = child_ns.to_set
 
   types = Dir.glob(File.join(dir, '*.html')).filter_map do |f|
     base = File.basename(f)
     next if base == 'index.html'
 
     name = File.basename(f, '.html')
-    next if child_leaves.include?(name)      # skip child-namespace pages (e.g. Mixins.html)
+    next if ns_set.include?(name)   # namespace page, listed under Namespaces instead
 
     meta = info[norm.call(name)] || {}
-    { name: name, href: base, kind: meta[:kind], summary: meta[:summary] }
+    { name: name, href: base, kind: meta[:kind] || page_kind.call(f), summary: meta[:summary] }
   end
-  next if types.empty? && children[rm].empty?
+  return if types.empty? && child_ns.empty?
 
-  by_kind = types.group_by { |c| c[:kind] }
   sections = []
-
-  # Namespaces first — they're navigation, above the module's own types.
-  unless children[rm].empty?
-    ns_rows = children[rm].sort.map do |c|
-      leaf = c.split('::').last
-      %(<a class="row ns" href="#{leaf}/index.html"><span class="n">#{esc.call(leaf)}</span></a>)
-    end.join("\n      ")
-    sections << %(<h2 class="sec">Namespaces <span class="ct">#{children[rm].length}</span></h2>\n      #{ns_rows})
+  unless child_ns.empty?
+    ns_rows = child_ns.map { |n| %(<a class="row ns" href="#{n}/index.html"><span class="n">#{esc.call(n)}</span></a>) }.join("\n      ")
+    sections << %(<h2 class="sec">Namespaces <span class="ct">#{child_ns.length}</span></h2>\n      #{ns_rows})
   end
-
+  by_kind = types.group_by { |c| c[:kind] }
   SECTIONS.each do |kind, label|
     items = by_kind[kind]
     next if items.nil? || items.empty?
@@ -113,16 +116,13 @@ ruby_modules.sort.each do |rm|
   other = types.reject { |c| SECTIONS.map(&:first).include?(c[:kind]) }
   sections << %(<h2 class="sec">Other <span class="ct">#{other.length}</span></h2>\n      #{render_rows.call(other)}) if other.any?
 
-  # Breadcrumb: AWSCDK / <seg> / ... / <current>, each linked to its own landing.
   crumb = [%(<a href="#{'../' * segs.length}index.html">AWSCDK</a>)]
   segs.each_with_index do |seg, i|
-    crumb << if i == segs.length - 1
-               %(<span class="cur">#{esc.call(seg)}</span>)
-             else
-               %(<a href="#{'../' * (segs.length - 1 - i)}index.html">#{esc.call(seg)}</a>)
-             end
+    crumb << (i == segs.length - 1 ? %(<span class="cur">#{esc.call(seg)}</span>) : %(<a href="#{'../' * (segs.length - 1 - i)}index.html">#{esc.call(seg)}</a>))
   end
   crumb = %(<nav class="cdk-crumb">#{crumb.join('<span class="sep">/</span>')}</nav>)
+
+  sub = [(child_ns.any? ? "#{child_ns.length} namespaces" : nil), "#{types.length} types"].compact.join(' · ')
 
   File.write(File.join(dir, 'index.html'), <<~HTML)
     <!doctype html>
@@ -132,11 +132,18 @@ ruby_modules.sort.each do |rm|
     <style>#{STYLE}</style></head><body><div class="wrap">
       #{crumb}
       <h1>#{esc.call(rm)}</h1>
-      <p class="sub">#{types.length} types</p>
+      <p class="sub">#{sub}</p>
       #{sections.join("\n      ")}
       <footer>Generated on #{Time.now.strftime('%a %b %d %H:%M:%S %Y')}.</footer>
     </div></body></html>
   HTML
   count += 1
+
+  child_ns.each { |n| process.call(File.join(dir, n)) }
 end
+
+Dir.children(awscdk)
+   .select { |d| File.directory?(File.join(awscdk, d)) && !class_page.call(File.join(awscdk, "#{d}.html")) }
+   .sort.each { |m| process.call(File.join(awscdk, m)) }
+
 puts "wrote #{count} namespace landings"

@@ -11,6 +11,12 @@ GEM_LIB="$(cd "$1" && pwd)"; OUT="$(mkdir -p "$2" && cd "$2" && pwd)"; shift 2
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PATH="$(ruby -e 'print Gem.user_dir')/bin:$PATH"
 
+# YARD's parser/registry recurse deeply on large modules (e.g. `interfaces` is ~3.3k
+# files) and SystemStackError with the default 8 MB stack. Raise the C stack (main
+# thread) and the VM stack so any single module builds in one run. Best-effort.
+ulimit -s unlimited 2>/dev/null || ulimit -s 1048576 2>/dev/null || true
+export RUBY_THREAD_VM_STACK_SIZE="${RUBY_THREAD_VM_STACK_SIZE:-536870912}"
+
 modules=("$@")
 [ ${#modules[@]} -eq 0 ] && modules=($(ls "$GEM_LIB"))
 mkdir -p "$OUT/AWSCDK"
