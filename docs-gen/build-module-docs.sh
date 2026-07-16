@@ -57,9 +57,16 @@ if [ "${PER_MODULE:-0}" = 1 ]; then
 else
   # Unified: one registry over the whole library so cross-module type links resolve.
   # Pass module dirs (YARD recurses for *.rb); a single invocation = a single registry.
+  # Also pass the top-level *.rb files — the AWSCDK root module's core types (Stack,
+  # App, IResolvable, Duration, RemovalPolicy, ...). They aren't under any submodule
+  # dir, so a dirs-only run would drop them *and* leave every reference to them
+  # unlinked (they're referenced everywhere). Skip the root _readme.rb (the package
+  # README; the site's own landing is the intro).
+  mapfile -t rootfiles < <(find . -maxdepth 1 -name '*.rb' ! -name '_readme.rb')
   total=$(find "${mods[@]}" -name '*.rb' | wc -l)
-  printf 'yard (unified) %s modules, %s files -> one registry\n' "${#mods[@]}" "$total"
-  yard doc "${mods[@]}" -o "$OUT" --no-cache --no-progress -q "${MARKUP[@]}"
+  printf 'yard (unified) %s modules + %s root types, %s files -> one registry\n' \
+    "${#mods[@]}" "${#rootfiles[@]}" "$((total + ${#rootfiles[@]}))"
+  yard doc "${mods[@]}" "${rootfiles[@]}" -o "$OUT" --no-cache --no-progress -q "${MARKUP[@]}"
 fi
 
 # Apply the theme: YARD loads common.css last, so this overrides style.css site-wide.

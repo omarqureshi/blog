@@ -38,6 +38,44 @@ cells = modules.map do |m|
   end
 end.join("\n    ")
 
+# The AWSCDK root module's own core types (Stack, App, IResolvable, Duration, ...) —
+# fqn `aws-cdk-lib.<Type>`, built as AWSCDK/<Type>.html (siblings of the submodule
+# dirs). List them from the built pages; kind comes from the assembly.
+norm = ->(s) { s.downcase.gsub(/[^a-z0-9]/, '') }
+root_kind = {}
+assembly.fetch('types', {}).each do |fqn, t|
+  next unless fqn.count('.') == 1 && fqn.start_with?("#{assembly['name']}.")
+
+  root_kind[norm.call(fqn.rpartition('.').last)] = t['kind']
+end
+core = Dir.glob(File.join(awscdk, '*.html')).filter_map do |f|
+  base = File.basename(f)
+  next if base == 'index.html'
+
+  name = File.basename(f, '.html')
+  { name: name, href: base, kind: root_kind[norm.call(name)] }
+end.sort_by { |c| c[:name].downcase }
+
+core_render = lambda do |items|
+  links = items.map do |c|
+    %(<a class="m live" href="#{c[:href]}">AWSCDK::#{esc.call(c[:name])}</a>)
+  end.join("\n    ")
+  %(<div class="cols">\n    #{links}\n    </div>)
+end
+core_html = ''
+unless core.empty?
+  by_kind = core.group_by { |c| c[:kind] }
+  parts = [['class', 'Classes'], ['interface', 'Interfaces'], ['enum', 'Enums']].filter_map do |kind, label|
+    items = by_kind[kind]
+    next if items.nil? || items.empty?
+
+    %(<h3 class="core-sub">#{label} <span class="ct">#{items.length}</span></h3>\n    #{core_render.call(items)})
+  end
+  other = core.reject { |c| %w[class interface enum].include?(c[:kind]) }
+  parts << %(<h3 class="core-sub">Other <span class="ct">#{other.length}</span></h3>\n    #{core_render.call(other)}) if other.any?
+  core_html = %(<h2 class="m-title" id="core">Core types <span class="ct">#{core.length}</span></h2>\n    #{parts.join("\n    ")}\n    )
+end
+
 code = ->(text) { %(<pre class="cb"><code>#{esc.call(text)}</code></pre>) }
 
 gemfile = <<~RUBY
@@ -170,6 +208,8 @@ File.write(File.join(awscdk, 'index.html'), <<~HTML)
     pre.cb{background:var(--panel);padding:.8rem 1rem;border-radius:8px;overflow-x:auto;margin:.5rem 0;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}
     pre.cb code{background:none;padding:0;font-size:inherit}
     .m-title{font-size:1.35rem;margin:2rem 0 .3rem;letter-spacing:-.01em;border-top:1px solid var(--line);padding-top:1.5rem}
+    .m-title .ct,.core-sub .ct{opacity:.55;font-weight:400;font-size:.85rem;margin-left:.3rem}
+    .core-sub{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:1.4rem 0 .2rem}
     .cols{columns:3 300px;column-gap:1.5rem;margin-top:1rem}
     .m{display:block;padding:.35rem .1rem;color:var(--muted);break-inside:avoid;text-decoration:none;font-family:ui-monospace,monospace;font-size:13px}
     a.m.live{color:var(--ink);font-weight:600}a.m.live:hover{color:var(--accent)}
@@ -180,9 +220,9 @@ File.write(File.join(awscdk, 'index.html'), <<~HTML)
     <nav class="cdk-crumb"><span class="cur">AWSCDK</span></nav>
     <h1>AWS CDK for <span class="r">Ruby</span></h1>
     <p class="sub">API reference for the native Ruby bindings of the AWS CDK.</p>
-    <nav class="links"><a href="#getting-started">Getting started</a><a href="#modules">Browse #{modules.length} modules ↓</a></nav>
+    <nav class="links"><a href="#getting-started">Getting started</a>#{core.empty? ? '' : '<a href="#core">Core types</a>'}<a href="#modules">Modules ↓</a></nav>
     #{getting_started}
-    <h2 class="m-title" id="modules">Modules</h2>
+    #{core_html}<h2 class="m-title" id="modules">Modules</h2>
     <div class="cols">
     #{cells}
     </div>

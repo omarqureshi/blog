@@ -18,9 +18,9 @@ Dir.glob(File.join(awscdk, '**', '*.html')).each do |f|
   next if File.basename(f) == 'index.html'
 
   comps = f.sub("#{awscdk}/", '').split('/')   # [seg1, ..., segK, "Class.html"]
-  next if comps.length < 2
+  next if comps.empty?                           # (root types are AWSCDK/<Type>.html: segs == [])
 
-  segs = comps[0..-2]                            # dir segments
+  segs = comps[0..-2]                            # dir segments (empty for a root type page)
   k = segs.length
   cls = File.basename(f, '.html')
 
