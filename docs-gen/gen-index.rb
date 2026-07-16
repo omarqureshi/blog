@@ -216,8 +216,8 @@ File.write(File.join(awscdk, 'index.html'), <<~HTML)
     .gs{border-top:1px solid var(--line);padding-top:.5rem}
     .gs h2{font-size:1.35rem;margin:1.4rem 0 .5rem;letter-spacing:-.01em}
     .gs h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:1.6rem 0 .4rem}
-    .gs p{margin:.4rem 0;max-width:70ch}
-    .gs ul{margin:.4rem 0;padding-left:1.2rem;max-width:80ch}.gs li{margin:.35rem 0}
+    .gs p{margin:.4rem 0}
+    .gs ul{margin:.4rem 0;padding-left:1.2rem}.gs li{margin:.35rem 0}
     .gs code,.m-title code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--panel);padding:.1em .35em;border-radius:4px;font-size:.88em;white-space:nowrap}
     pre.cb{background:var(--panel);padding:.8rem 1rem;border-radius:8px;overflow-x:auto;margin:.5rem 0;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}
     pre.cb code{background:none;padding:0;font-size:inherit;white-space:pre}
