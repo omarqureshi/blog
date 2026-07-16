@@ -10,6 +10,11 @@
 require 'json'
 require 'zlib'
 require 'set'
+begin
+  require 'rouge' # syntax highlighting for the getting-started code blocks
+rescue LoadError
+  # fall back to plain (escaped) code if the gem isn't present
+end
 
 assembly_path, out_dir = ARGV
 awscdk = File.join(out_dir, 'AWSCDK')
@@ -76,7 +81,16 @@ unless core.empty?
   core_html = %(<h2 class="m-title" id="core">Core types <span class="ct">#{core.length}</span></h2>\n    #{parts.join("\n    ")}\n    )
 end
 
-code = ->(text) { %(<pre class="cb"><code>#{esc.call(text)}</code></pre>) }
+code = lambda do |text, lang = 'ruby'|
+  inner =
+    if defined?(Rouge)
+      lexer = Rouge::Lexer.find(lang) || Rouge::Lexers::PlainText.new
+      Rouge::Formatters::HTML.new.format(lexer.lex(text))
+    else
+      esc.call(text)
+    end
+  %(<pre class="cb"><code>#{inner}</code></pre>)
+end
 
 gemfile = <<~RUBY
   source 'https://rubygems.org'
@@ -159,7 +173,7 @@ getting_started = <<~HTML
 
     <h3>cdk.json</h3>
     <p>Tells the CDK CLI how to run your app:</p>
-    #{code.call(%({\n  "app": "bundle exec ruby app.rb"\n}))}
+    #{code.call(%({\n  "app": "bundle exec ruby app.rb"\n}), 'json')}
 
     <h3>A first stack</h3>
     <p>Subclass <code>AWSCDK::Stack</code>, call <code>super</code>, and instantiate
@@ -169,7 +183,7 @@ getting_started = <<~HTML
     #{code.call(app)}
 
     <h3>Deploy</h3>
-    #{code.call(deploy)}
+    #{code.call(deploy, 'console')}
 
     <h3>Naming rules</h3>
     <p>The conventions you'll rely on reading these docs:</p>
@@ -190,8 +204,8 @@ File.write(File.join(awscdk, 'index.html'), <<~HTML)
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AWS CDK for Ruby — API Reference</title>
   <style>
-    :root{color-scheme:light dark;--bg:#fbfbfc;--ink:#1a1a1e;--muted:#70707a;--line:#e6e6ea;--accent:#cc342d;--live:#157f3b;--panel:#f4f4f6}
-    @media(prefers-color-scheme:dark){:root{--bg:#131317;--ink:#e9e9ee;--muted:#9a9aa6;--line:#2a2a33;--live:#4ec27a;--panel:#1c1c22}}
+    :root{color-scheme:light dark;--bg:#fbfbfc;--ink:#1a1a1e;--muted:#70707a;--line:#e6e6ea;--accent:#cc342d;--live:#157f3b;--panel:#f4f4f6;--tok-const:#6f42c1;--tok-str:#0a7d33;--tok-sym:#b5690a;--tok-num:#0a5fb4}
+    @media(prefers-color-scheme:dark){:root{--bg:#131317;--ink:#e9e9ee;--muted:#9a9aa6;--line:#2a2a33;--live:#4ec27a;--panel:#1c1c22;--tok-const:#b392f0;--tok-str:#7ec97e;--tok-sym:#e0a458;--tok-num:#79b8ff}}
     body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,sans-serif}
     .wrap{max-width:1120px;margin:0 auto;padding:2.5rem 1.25rem 4rem}
     h1{font-size:1.9rem;margin:0 0 .2rem;letter-spacing:-.02em}h1 .r{color:var(--accent)}
@@ -204,9 +218,17 @@ File.write(File.join(awscdk, 'index.html'), <<~HTML)
     .gs h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:1.6rem 0 .4rem}
     .gs p{margin:.4rem 0;max-width:70ch}
     .gs ul{margin:.4rem 0;padding-left:1.2rem;max-width:80ch}.gs li{margin:.35rem 0}
-    .gs code,.m-title code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--panel);padding:.1em .35em;border-radius:4px;font-size:.88em}
+    .gs code,.m-title code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--panel);padding:.1em .35em;border-radius:4px;font-size:.88em;white-space:nowrap}
     pre.cb{background:var(--panel);padding:.8rem 1rem;border-radius:8px;overflow-x:auto;margin:.5rem 0;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}
-    pre.cb code{background:none;padding:0;font-size:inherit}
+    pre.cb code{background:none;padding:0;font-size:inherit;white-space:pre}
+    pre.cb .k,pre.cb .kp,pre.cb .kd,pre.cb .kn{color:var(--accent)}
+    pre.cb .no,pre.cb .nc,pre.cb .nn,pre.cb .nb{color:var(--tok-const)}
+    pre.cb .s,pre.cb .s1,pre.cb .s2,pre.cb .sb,pre.cb .sd,pre.cb .dl,pre.cb .si,pre.cb .sx{color:var(--tok-str)}
+    pre.cb .ss,pre.cb .nl{color:var(--tok-sym)}
+    pre.cb .mi,pre.cb .mf,pre.cb .il{color:var(--tok-num)}
+    pre.cb .c,pre.cb .c1,pre.cb .cm,pre.cb .cs{color:var(--muted);font-style:italic}
+    pre.cb .nf,pre.cb .n,pre.cb .nx,pre.cb .ni{color:var(--ink)}
+    pre.cb .o,pre.cb .p,pre.cb .py,pre.cb .gp{color:var(--muted)}
     .m-title{font-size:1.35rem;margin:2rem 0 .3rem;letter-spacing:-.01em;border-top:1px solid var(--line);padding-top:1.5rem}
     .m-title .ct,.core-sub .ct{opacity:.55;font-weight:400;font-size:.85rem;margin-left:.3rem}
     .core-sub{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:1.4rem 0 .2rem}

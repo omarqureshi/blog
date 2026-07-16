@@ -53,6 +53,11 @@ STYLE = <<~CSS
   .row.ns .n::before{content:"\\2325\\A0";color:var(--muted)}
   .s{color:var(--muted);font-size:.88rem}
   footer{margin-top:1.75rem;color:var(--muted);font-size:.82rem;border-top:1px solid var(--line);padding-top:1rem;text-align:center}
+  .jump{margin:.2rem 0 .3rem;font:600 .85rem system-ui,-apple-system,sans-serif}
+  .jump a{color:var(--accent);text-decoration:none}.jump a:hover{text-decoration:underline}
+  .jump .sep{color:var(--muted);margin:0 .5rem;font-weight:400}
+  .apiref{font-size:1.2rem;font-weight:700;letter-spacing:-.01em;color:var(--ink);text-transform:none;margin:1.75rem 0 .4rem;padding-top:1.25rem;border-top:1px solid var(--line)}
+  .no-readme{color:var(--muted);font-style:italic;margin:.3rem 0}
   .readme{margin:.5rem 0 1rem;line-height:1.6;overflow-wrap:break-word}
   .readme h1{font-size:1.35rem;font-family:inherit;margin:1.4rem 0 .5rem}
   .readme h2{font-size:1.12rem;font-weight:700;color:var(--ink);text-transform:none;letter-spacing:0;margin:1.3rem 0 .4rem}
@@ -146,16 +151,21 @@ process = lambda do |dir|
   # block onto the landing and drop the now-orphan page. Its links are relative
   # to the module page, which sits one level above the landing, so bump each
   # relative href/src by one `../`.
-  readme = ''
+  readme_inner = ''
   module_page = "#{dir}.html"
   if File.exist?(module_page)
     html = File.read(module_page)
     if (m = html.match(%r{<div class="discussion">(.*?)</div>\s*</div>}m)) && !m[1].strip.empty?
-      inner = m[1].strip.gsub(/\b(href|src)="(?!https?:|mailto:|#|\/)/, '\1="../')
-      readme = %(<section class="readme">\n      #{inner}\n      </section>\n      )
+      readme_inner = m[1].strip.gsub(/\b(href|src)="(?!https?:|mailto:|#|\/)/, '\1="../')
     end
     File.delete(module_page)
   end
+  # Every landing has the same shape — a README section and an API Reference section,
+  # with jump links between them — so readers can skip the prose straight to the API.
+  # A missing README is shown as an explicit gap (a CDK-content issue to fix), never a
+  # different layout.
+  readme_body =
+    readme_inner.empty? ? '<p class="no-readme">No README for this module yet.</p>' : readme_inner
 
   File.write(File.join(dir, 'index.html'), <<~HTML)
     <!doctype html>
@@ -166,7 +176,12 @@ process = lambda do |dir|
       #{crumb}
       <h1>#{esc.call(rm)}</h1>
       <p class="sub">#{sub}</p>
-      #{readme}#{sections.join("\n      ")}
+      <nav class="jump"><a href="#readme">README</a><span class="sep">·</span><a href="#api">API Reference</a></nav>
+      <section class="readme" id="readme">
+      #{readme_body}
+      </section>
+      <h2 class="apiref" id="api">API Reference</h2>
+      #{sections.join("\n      ")}
       <footer>Generated on #{Time.now.strftime('%a %b %d %H:%M:%S %Y')}.</footer>
     </div></body></html>
   HTML
