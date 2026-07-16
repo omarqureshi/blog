@@ -15,9 +15,12 @@ GEM_LIB="$(cd "$1" && pwd)"; OUT="$(mkdir -p "$2" && cd "$2" && pwd)"; shift 2
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PATH="$(ruby -e 'print Gem.user_dir')/bin:$PATH"
 
-# YARD's parser/registry recurse deeply; the full library overflows the default 8 MB C
-# stack (SystemStackError). Raise the C stack (main thread) and the VM stack so one
-# unified run survives. Best-effort.
+# YARD's parser/registry recurse deeply on the big modules (interfaces is ~3.3k files)
+# and SystemStackError. BOTH raises below are required — neither alone is enough
+# (verified on `interfaces`): they clear two different limits hit at two different phases.
+# Raise only the C/machine stack and it still dies in the registry resolver
+# (YARD::Registry.at) when the VM frame stack fills; raise only the VM stack and it dies
+# in the parser (ruby_parser Array.new) when the C stack fills. Set both. Best-effort.
 ulimit -s unlimited 2>/dev/null || ulimit -s 1048576 2>/dev/null || true
 export RUBY_THREAD_VM_STACK_SIZE="${RUBY_THREAD_VM_STACK_SIZE:-536870912}"
 
