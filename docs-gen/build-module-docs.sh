@@ -21,6 +21,12 @@ export PATH="$(ruby -e 'print Gem.user_dir')/bin:$PATH"
 ulimit -s unlimited 2>/dev/null || ulimit -s 1048576 2>/dev/null || true
 export RUBY_THREAD_VM_STACK_SIZE="${RUBY_THREAD_VM_STACK_SIZE:-536870912}"
 
+# jsii docs (and the module READMEs) are CommonMark. Render with redcarpet: it handles
+# fenced ```ruby blocks *and* YARD then applies its own highlighter to them, so README
+# examples get the same token markup as inline @example blocks. (kramdown's default mode
+# doesn't recognise ``` fences; its GFM mode uses a different, unthemed highlighter.)
+MARKUP=(--markup markdown --markup-provider redcarpet)
+
 modules=("$@")
 [ ${#modules[@]} -eq 0 ] && modules=($(ls "$GEM_LIB"))
 mkdir -p "$OUT/AWSCDK"
@@ -40,7 +46,7 @@ if [ "${PER_MODULE:-0}" = 1 ]; then
     mapfile -t files < <(find "$mod" -name '*.rb')   # relative paths -> clean "Defined in"
     if [ ${#files[@]} -gt 0 ]; then
       printf 'yard %-22s %s files\n' "$mod" "${#files[@]}"
-      if yard doc "${files[@]}" -o "$tmp" --no-cache --no-progress -q 2>/dev/null; then
+      if yard doc "${files[@]}" -o "$tmp" --no-cache --no-progress -q "${MARKUP[@]}" 2>/dev/null; then
         cp -r "$tmp/." "$OUT/"   # merge: AWSCDK/<Module>/ accumulates; css/js last-wins
       else
         echo "  (yard failed for $mod)"
@@ -53,7 +59,7 @@ else
   # Pass module dirs (YARD recurses for *.rb); a single invocation = a single registry.
   total=$(find "${mods[@]}" -name '*.rb' | wc -l)
   printf 'yard (unified) %s modules, %s files -> one registry\n' "${#mods[@]}" "$total"
-  yard doc "${mods[@]}" -o "$OUT" --no-cache --no-progress -q
+  yard doc "${mods[@]}" -o "$OUT" --no-cache --no-progress -q "${MARKUP[@]}"
 fi
 
 # Apply the theme: YARD loads common.css last, so this overrides style.css site-wide.

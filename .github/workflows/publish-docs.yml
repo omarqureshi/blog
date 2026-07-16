@@ -27,8 +27,10 @@ jobs:
         with:
           ruby-version: '3.3'   # YARD only parses the source (no gem load), so 3.3 is fine
 
-      - name: Install YARD
-        run: gem install yard --no-document   # YARD's own highlighter; rouge not needed
+      - name: Install YARD + redcarpet
+        # redcarpet renders the CommonMark docstrings/READMEs; YARD applies its own
+        # highlighter to redcarpet's fenced ```ruby blocks (rouge not needed).
+        run: gem install yard redcarpet --no-document
 
       - name: Download & extract aws-cdk-lib from the feed
         run: |

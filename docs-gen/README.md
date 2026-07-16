@@ -29,11 +29,16 @@ cross-module links won't resolve) — a safety valve, not the default.
 | step | script | does |
 |------|--------|------|
 | 1 | `build-module-docs.sh <gem-lib> <out> [modules…]` | one unified YARD run (all modules, one registry → cross-module links); applies `docs-theme.css` |
-| 2 | `gen-module-landing.rb <assembly> <out>` | a landing per submodule (incl. nested namespaces like `ECR/Mixins`) — classes/interfaces/enums + child namespaces |
+| 2 | `gen-module-landing.rb <assembly> <out>` | a landing per submodule (incl. nested namespaces like `ECR/Mixins`) — the module README (if any) + classes/interfaces/enums + child namespaces |
 | 3 | `inject-crumb.rb <out>` | full-path breadcrumb into each class page (runs *after* landings so it can tell namespaces from classes); the theme hides YARD's broken frame nav |
 | 4 | `gen-index.rb <assembly> <out>` | `AWSCDK/index.html` (top-level modules only) + `/` → `/AWSCDK/` redirect |
 
-- **YARD** renders the class pages (with Ruby `@example` blocks from jsii-rosetta).
+- **YARD** renders the class pages (with Ruby `@example` blocks from jsii-rosetta),
+  using `--markup markdown --markup-provider redcarpet` so CommonMark docstrings and the
+  module READMEs render — YARD highlights redcarpet's fenced ```ruby blocks natively.
+- **Module READMEs**: pacmak's Ruby target emits each submodule's Rosetta-translated
+  README as the module docstring; YARD renders it on the module page (`AWSCDK/S3.html`),
+  and step 2 lifts that onto the landing and drops the orphan page.
 - The **jsii assembly** (`.jsii`) drives the module list, names, and per-class kind/summary.
 - All links are **relative** → the built site is mount-agnostic (works at `/docs`, `/`, anywhere).
 

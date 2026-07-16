@@ -34,8 +34,8 @@ esc = ->(s) { s.to_s.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;') }
 SECTIONS = [['class', 'Classes'], ['interface', 'Interfaces'], ['enum', 'Enums']].freeze
 
 STYLE = <<~CSS
-  :root{color-scheme:light dark;--bg:#fbfbfc;--ink:#1a1a1e;--muted:#70707a;--line:#e6e6ea;--accent:#cc342d}
-  @media(prefers-color-scheme:dark){:root{--bg:#131317;--ink:#e9e9ee;--muted:#9a9aa6;--line:#2a2a33}}
+  :root{color-scheme:light dark;--bg:#fbfbfc;--ink:#1a1a1e;--muted:#70707a;--line:#e6e6ea;--accent:#cc342d;--panel:#f4f4f6;--tok-const:#6f42c1;--tok-str:#0a7d33;--tok-sym:#b5690a;--tok-num:#0a5fb4}
+  @media(prefers-color-scheme:dark){:root{--bg:#131317;--ink:#e9e9ee;--muted:#9a9aa6;--line:#2a2a33;--panel:#1c1c22;--tok-const:#b392f0;--tok-str:#7ec97e;--tok-sym:#e0a458;--tok-num:#79b8ff}}
   body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,sans-serif}
   .wrap{max-width:1120px;margin:0 auto;padding:2rem 1.25rem 4rem}
   .cdk-crumb{margin:0 0 .4rem;font:600 .85rem system-ui,-apple-system,sans-serif}
@@ -53,6 +53,23 @@ STYLE = <<~CSS
   .row.ns .n::before{content:"\\2325\\A0";color:var(--muted)}
   .s{color:var(--muted);font-size:.88rem}
   footer{margin-top:1.75rem;color:var(--muted);font-size:.82rem;border-top:1px solid var(--line);padding-top:1rem;text-align:center}
+  .readme{margin:.5rem 0 1rem;line-height:1.6;overflow-wrap:break-word}
+  .readme h1{font-size:1.35rem;font-family:inherit;margin:1.4rem 0 .5rem}
+  .readme h2{font-size:1.12rem;font-weight:700;color:var(--ink);text-transform:none;letter-spacing:0;margin:1.3rem 0 .4rem}
+  .readme h3{font-size:1rem;font-weight:700;margin:1.1rem 0 .35rem}
+  .readme p,.readme li{color:var(--ink)}
+  .readme a{color:var(--accent);text-decoration:none} .readme a:hover{text-decoration:underline}
+  .readme table{border-collapse:collapse;display:block;overflow-x:auto} .readme th,.readme td{border:1px solid var(--line);padding:.35rem .6rem}
+  .readme blockquote{border-left:3px solid var(--line);margin:.6rem 0;padding:.1rem 0 .1rem 1rem;color:var(--muted)}
+  .readme pre.code,.readme pre{background:var(--panel);padding:.75rem 1rem;border-radius:6px;overflow-x:auto;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+  .readme :not(pre)>code{background:var(--panel);padding:.12em .35em;border-radius:4px;font:0.9em ui-monospace,SFMono-Regular,Menlo,monospace}
+  .readme pre code{background:none;padding:0}
+  pre.code .kw{color:var(--accent)} pre.code .const{color:var(--tok-const)}
+  pre.code .tstring,pre.code .tstring_content,pre.code .tstring_beg,pre.code .tstring_end,pre.code .regexp{color:var(--tok-str)}
+  pre.code .symbol,pre.code .ivar{color:var(--tok-sym)} pre.code .int,pre.code .float{color:var(--tok-num)}
+  pre.code .comment,pre.code .info{color:var(--muted);font-style:italic} pre.code .label{color:var(--tok-sym)}
+  pre.code .op,pre.code .period,pre.code .comma,pre.code .lparen,pre.code .rparen,pre.code .lbrace,pre.code .rbrace,pre.code .lbracket,pre.code .rbracket{color:var(--muted)}
+  pre.code .id{color:var(--ink)} pre.code .object_link a{color:var(--tok-const)}
 CSS
 
 # YARD page kind from its <h1>: Class -> class; Module -> (jsii) interface; else nil.
@@ -124,6 +141,22 @@ process = lambda do |dir|
 
   sub = [(child_ns.any? ? "#{child_ns.length} namespaces" : nil), "#{types.length} types"].compact.join(' · ')
 
+  # A module README (if pacmak emitted one) lands on YARD's module page —
+  # "<dir>.html", the sibling of this landing. Lift its rendered discussion
+  # block onto the landing and drop the now-orphan page. Its links are relative
+  # to the module page, which sits one level above the landing, so bump each
+  # relative href/src by one `../`.
+  readme = ''
+  module_page = "#{dir}.html"
+  if File.exist?(module_page)
+    html = File.read(module_page)
+    if (m = html.match(%r{<div class="discussion">(.*?)</div>\s*</div>}m)) && !m[1].strip.empty?
+      inner = m[1].strip.gsub(/\b(href|src)="(?!https?:|mailto:|#|\/)/, '\1="../')
+      readme = %(<section class="readme">\n      #{inner}\n      </section>\n      )
+    end
+    File.delete(module_page)
+  end
+
   File.write(File.join(dir, 'index.html'), <<~HTML)
     <!doctype html>
     <html lang="en"><head><meta charset="utf-8">
@@ -133,7 +166,7 @@ process = lambda do |dir|
       #{crumb}
       <h1>#{esc.call(rm)}</h1>
       <p class="sub">#{sub}</p>
-      #{sections.join("\n      ")}
+      #{readme}#{sections.join("\n      ")}
       <footer>Generated on #{Time.now.strftime('%a %b %d %H:%M:%S %Y')}.</footer>
     </div></body></html>
   HTML
