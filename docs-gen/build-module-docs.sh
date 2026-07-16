@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Per-module YARD docs merged into one namespace-rooted tree:
-#   <out>/AWSCDK/<Module>/<Class>.html   (+ shared css/js at <out>/)
-# Each module is built in isolation (crash-safe), then its AWSCDK/<Module>/ subtree
-# is merged in. Finally the docs theme is applied (YARD's common.css, loaded last).
-# Built with the gem lib as CWD so source paths render clean ("dynamo_db/table.rb").
+# All modules rendered in ONE YARD registry so cross-module type links resolve
+# (e.g. S3's `encryption_key : KMS::IKey` links to AWSCDK/KMS/IKey.html). YARD only
+# linkifies types present in its registry at render time, so the whole library has to be
+# a single `yard doc` run — per-module builds leave those refs as plain text. Output tree
+# is AWSCDK/<Module>/<Class>.html (+ shared css/js). Built with the gem lib as CWD so
+# "Defined in" paths render clean ("dynamo_db/table.rb"). Finally the theme is applied.
+#
+# Set PER_MODULE=1 to fall back to isolated per-module builds: crash-safe (each module in
+# its own process), but cross-module links won't resolve. Kept as a safety valve.
 #
 #   build-module-docs.sh <gem-lib-dir> <out-dir> [module ...]   (no args = all)
 set -euo pipefail
@@ -11,32 +15,46 @@ GEM_LIB="$(cd "$1" && pwd)"; OUT="$(mkdir -p "$2" && cd "$2" && pwd)"; shift 2
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PATH="$(ruby -e 'print Gem.user_dir')/bin:$PATH"
 
-# YARD's parser/registry recurse deeply on large modules (e.g. `interfaces` is ~3.3k
-# files) and SystemStackError with the default 8 MB stack. Raise the C stack (main
-# thread) and the VM stack so any single module builds in one run. Best-effort.
+# YARD's parser/registry recurse deeply; the full library overflows the default 8 MB C
+# stack (SystemStackError). Raise the C stack (main thread) and the VM stack so one
+# unified run survives. Best-effort.
 ulimit -s unlimited 2>/dev/null || ulimit -s 1048576 2>/dev/null || true
 export RUBY_THREAD_VM_STACK_SIZE="${RUBY_THREAD_VM_STACK_SIZE:-536870912}"
 
 modules=("$@")
 [ ${#modules[@]} -eq 0 ] && modules=($(ls "$GEM_LIB"))
 mkdir -p "$OUT/AWSCDK"
+cd "$GEM_LIB"
 
+# Keep only real module dirs (relative names, so "Defined in" paths stay clean).
+mods=()
 for mod in "${modules[@]}"; do
-  [ -d "$GEM_LIB/$mod" ] || { echo "skip $mod (no dir)"; continue; }
-  tmp=$(mktemp -d)
-  pushd "$GEM_LIB" >/dev/null
-  mapfile -t files < <(find "$mod" -name '*.rb')   # relative paths -> clean "Defined in"
-  if [ ${#files[@]} -gt 0 ]; then
-    printf 'yard %-22s %s files\n' "$mod" "${#files[@]}"
-    if yard doc "${files[@]}" -o "$tmp" --no-cache --no-progress -q 2>/dev/null; then
-      cp -r "$tmp/." "$OUT/"   # merge: AWSCDK/<Module>/ accumulates; css/js last-wins
-    else
-      echo "  (yard failed for $mod)"
-    fi
-  fi
-  popd >/dev/null
-  rm -rf "$tmp"
+  [ -d "$GEM_LIB/$mod" ] && mods+=("$mod") || echo "skip $mod (no dir)"
 done
+[ ${#mods[@]} -eq 0 ] && { echo "no modules to build"; exit 0; }
+
+if [ "${PER_MODULE:-0}" = 1 ]; then
+  # Fallback: isolated per-module builds. Crash-safe, but cross-module links stay plain.
+  for mod in "${mods[@]}"; do
+    tmp=$(mktemp -d)
+    mapfile -t files < <(find "$mod" -name '*.rb')   # relative paths -> clean "Defined in"
+    if [ ${#files[@]} -gt 0 ]; then
+      printf 'yard %-22s %s files\n' "$mod" "${#files[@]}"
+      if yard doc "${files[@]}" -o "$tmp" --no-cache --no-progress -q 2>/dev/null; then
+        cp -r "$tmp/." "$OUT/"   # merge: AWSCDK/<Module>/ accumulates; css/js last-wins
+      else
+        echo "  (yard failed for $mod)"
+      fi
+    fi
+    rm -rf "$tmp"
+  done
+else
+  # Unified: one registry over the whole library so cross-module type links resolve.
+  # Pass module dirs (YARD recurses for *.rb); a single invocation = a single registry.
+  total=$(find "${mods[@]}" -name '*.rb' | wc -l)
+  printf 'yard (unified) %s modules, %s files -> one registry\n' "${#mods[@]}" "$total"
+  yard doc "${mods[@]}" -o "$OUT" --no-cache --no-progress -q
+fi
 
 # Apply the theme: YARD loads common.css last, so this overrides style.css site-wide.
 if [ -f "$SELF_DIR/docs-theme.css" ] && [ -d "$OUT/css" ]; then
