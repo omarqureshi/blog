@@ -64,6 +64,11 @@ core = Dir.glob(File.join(awscdk, '*.html')).filter_map do |f|
   next if base == 'index.html'
 
   name = File.basename(f, '.html')
+  # Only real root types, not orphan module pages. A type-less submodule with a README
+  # (e.g. the deprecated AWSCDK::Assets tombstone) still gets a YARD module page at
+  # AWSCDK/<Name>.html; the assembly has no root type by that name, so skip it.
+  next unless root_kind.key?(norm.call(name))
+
   { name: name, href: base, kind: root_kind[norm.call(name)] }
 end.sort_by { |c| c[:name].downcase }
 
