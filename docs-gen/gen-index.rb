@@ -21,12 +21,18 @@ awscdk = File.join(out_dir, 'AWSCDK')
 raw = File.binread(assembly_path)
 assembly = JSON.parse(raw[0, 2].bytes == [0x1f, 0x8b] ? Zlib.gunzip(raw) : raw)
 
-modules = assembly.fetch('submodules', {}).values.filter_map do |sub|
+# Top-level submodule fqns (`aws-cdk-lib.<name>`) that actually contain types.
+# A type-less submodule is a deprecated tombstone (only AWSCDK::Assets — "All types
+# moved to @aws-cdk/core") with no page to link to; skip it rather than list a dead entry.
+subs_with_types = assembly.fetch('types', {}).keys.map { |tf| tf.split('.')[0, 2].join('.') }.to_set
+
+modules = assembly.fetch('submodules', {}).filter_map do |fqn, sub|
   name = sub.dig('targets', 'ruby', 'module')
   next unless name
   # Only top-level modules (AWSCDK::X). Nested sub-namespaces like AWSCDK::ECR::Mixins
   # are listed on their parent module's page, not here.
   next unless name.split('::').length == 2
+  next unless subs_with_types.include?(fqn)
 
   { name: name, leaf: name.split('::').last }
 end.uniq { |m| m[:name] }.sort_by { |m| m[:name].downcase }
