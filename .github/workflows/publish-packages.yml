@@ -5,6 +5,13 @@ on:
   schedule:
     - cron: '0 0 * * *' # Nightly at midnight UTC
 
+# Serialize against other publishes AND the docs rebuild: the S3 publish step
+# does a read-modify-write of the whole gem index, which two concurrent runs
+# would corrupt. Same group as publish-docs.yml; never cancel a running publish.
+concurrency:
+  group: gem-publish
+  cancel-in-progress: false
+
 permissions:
   packages: write
   contents: read
@@ -16,6 +23,8 @@ jobs:
     environment: production # exposes the AWS_ACCOUNT_ID environment secret used for the S3 publish
     env:
       NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      gem_version: ${{ steps.version.outputs.gem_version }}
     steps:
       - name: Checkout JSII
         uses: actions/checkout@v6
@@ -41,21 +50,37 @@ jobs:
           ref: ruby-language-bindings-self-publish
           path: aws-cdk
 
+      # Checkout of THIS repo, for the committed publish config (expected acronyms,
+      # constructs/asset-package ruby naming) and post-publish scripts.
+      - name: Checkout blog (publish config)
+        uses: actions/checkout@v6
+        with:
+          path: blog
+
       # Guard: an upstream rebase that resolves the aws-cdk-lib/package.json conflict with
-      # `--ours` silently drops jsii.targets.ruby (module + acronyms). Without acronyms, the
-      # generator renders class names like RestApi instead of RestAPI, which breaks consumers
-      # (e.g. the blog stack). Fail the publish loudly rather than shipping a broken gem.
+      # `--ours` silently drops or mangles jsii.targets.ruby (module + acronyms). Without
+      # acronyms, the generator renders class names like RestApi instead of RestAPI, which
+      # breaks consumers (e.g. the blog stack). Compare against the committed expected list
+      # (a presence-only check passes on a partially-mangled rebase); fail the publish
+      # loudly rather than shipping a broken gem.
       - name: Validate aws-cdk-lib Ruby acronyms
         working-directory: aws-cdk
         run: |
           node -e '
-            const ruby = require("./packages/aws-cdk-lib/package.json").jsii?.targets?.ruby;
-            const n = ruby?.acronyms?.length ?? 0;
-            if (!ruby?.module || n === 0) {
-              console.error("::error::aws-cdk-lib/package.json is missing jsii.targets.ruby.acronyms — a rebase likely dropped the ruby target. Restore it before publishing (class names lose acronym casing otherwise).");
+            const expected = require("../blog/.github/publish-config/aws-cdk-lib-ruby-target.json");
+            const ruby = require("./packages/aws-cdk-lib/package.json").jsii?.targets?.ruby ?? {};
+            const actual = new Set(ruby.acronyms ?? []);
+            const want = new Set(expected.acronyms);
+            const missing = expected.acronyms.filter((a) => !actual.has(a));
+            const extra = [...actual].filter((a) => !want.has(a));
+            if (ruby.module !== expected.module || missing.length > 0) {
+              console.error(`::error::aws-cdk-lib jsii.targets.ruby diverges from the committed expected list — a rebase likely mangled it. module=${ruby.module} (want ${expected.module}); missing acronyms: ${missing.join(", ") || "none"}. If the change is intentional, update .github/publish-config/aws-cdk-lib-ruby-target.json in the blog repo.`);
               process.exit(1);
             }
-            console.log(`aws-cdk-lib ruby target OK: module=${ruby.module}, ${n} acronyms`);
+            if (extra.length > 0) {
+              console.log(`note: ${extra.length} acronym(s) beyond the expected list (fine — new additions): ${extra.join(", ")}`);
+            }
+            console.log(`aws-cdk-lib ruby target OK: module=${ruby.module}, ${actual.size} acronyms (all ${want.size} expected present)`);
           '
 
       - name: Checkout JSII Compiler
@@ -111,6 +136,35 @@ jobs:
           echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
           echo "NPM_VERSION=0.0.0-$TIMESTAMP" >> $GITHUB_ENV
           echo "GEM_VERSION=0.0.0.pre.$TIMESTAMP" >> $GITHUB_ENV
+          echo "gem_version=0.0.0.pre.$TIMESTAMP" >> "$GITHUB_OUTPUT"
+
+      # Traceability: 0.0.0.pre.<timestamp> alone says nothing about what was
+      # built. Record the exact source SHA of every checkout; uploaded beside the
+      # gem index in the S3 publish step as manifests/<version>.json.
+      - name: Record source manifest
+        run: |
+          set -euo pipefail
+          node -e '
+            const { execSync } = require("child_process");
+            const sha = (dir) => execSync(`git -C ${dir} rev-parse HEAD`).toString().trim();
+            const manifest = {
+              gem_version: process.env.GEM_VERSION,
+              npm_version: process.env.NPM_VERSION,
+              built_at: new Date().toISOString(),
+              workflow_run: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+              sources: {
+                "omarqureshi/jsii": sha("jsii"),
+                "omarqureshi/aws-cdk": sha("aws-cdk"),
+                "omarqureshi/jsii-compiler": sha("jsii-compiler"),
+                "omarqureshi/jsii-rosetta": sha("jsii-rosetta"),
+                "omarqureshi/jsii-docgen": sha("jsii-docgen"),
+                "aws/constructs": sha("constructs"),
+                "omarqureshi/blog": process.env.GITHUB_SHA,
+              },
+            };
+            require("fs").writeFileSync("manifest.json", JSON.stringify(manifest, null, 2));
+            console.log(JSON.stringify(manifest, null, 2));
+          '
 
       # Build the Ruby-supporting rosetta fork into a tgz FIRST, so the jsii build
       # below can resolve jsii-rosetta to it. pacmak's ruby target references
@@ -213,9 +267,16 @@ jobs:
           corepack enable
           yarn install
           yarn build
+          # Naming comes from committed config, not inline literals — the values are
+          # published gem/module names (permanent public API).
+          RUBY_TARGET=$(jq -c '.constructs' ../blog/.github/publish-config/ruby-targets.json)
+          if [ "$RUBY_TARGET" = "null" ]; then
+            echo "::error::no ruby-targets.json entry for 'constructs' — add one before publishing"
+            exit 1
+          fi
           jq ".version = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
-          jq '.jsii.targets.ruby = {"gem": "constructs", "module": "Constructs"}' package.json > tmp.json && mv tmp.json package.json
-          jq ".version = \"${{ env.NPM_VERSION }}\" | .targets.ruby = {\"gem\": \"constructs\", \"module\": \"Constructs\"}" .jsii > tmp.jsii && mv tmp.jsii .jsii
+          jq --argjson t "$RUBY_TARGET" '.jsii.targets.ruby = $t' package.json > tmp.json && mv tmp.json package.json
+          jq --argjson t "$RUBY_TARGET" ".version = \"${{ env.NPM_VERSION }}\" | .targets.ruby = \$t" .jsii > tmp.jsii && mv tmp.jsii .jsii
           rm -rf dist/ruby
           node ../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --rosetta-unknown-snippets translate --force-target -- .
           cd dist/ruby
@@ -251,8 +312,13 @@ jobs:
             echo "Publishing dependency: $pkg"
             cd $ROOT_DIR/node_modules/@aws-cdk/$pkg
             jq ".version = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
-            GEM_NAME="aws-cdk-$pkg"
-            MODULE_NAME=$(echo "$GEM_NAME" | sed -r 's/(^|-)([a-z])/\U\2/g')
+            # Naming from committed config (permanent public API — see ruby-targets.json).
+            GEM_NAME=$(jq -r ".\"$pkg\".gem" "$GITHUB_WORKSPACE/blog/.github/publish-config/ruby-targets.json")
+            MODULE_NAME=$(jq -r ".\"$pkg\".module" "$GITHUB_WORKSPACE/blog/.github/publish-config/ruby-targets.json")
+            if [ "$GEM_NAME" = "null" ] || [ "$MODULE_NAME" = "null" ]; then
+              echo "::error::no ruby-targets.json entry for '$pkg' — add one before publishing"
+              exit 1
+            fi
             if [ -f .jsii.gz ]; then
               gunzip -c .jsii.gz > tmp_src.jsii
             else
@@ -323,18 +389,133 @@ jobs:
           gem install rubygems-generate_index --no-document
           gem generate_index --directory "$REPO_DIR"
 
-          # Upload gems + index to the bucket (private; served via CloudFront).
+          # Reconciliation guard: every gem built this run (i.e. everything pushed to
+          # GitHub Packages above) must appear in the regenerated prerelease index —
+          # otherwise the two feeds silently diverge. Fail before uploading anything.
+          ruby -rzlib -rstringio -e '
+            specs = Marshal.load(Zlib::GzipReader.new(StringIO.new(File.binread("'"$REPO_DIR"'/prerelease_specs.4.8.gz"))).read)
+            indexed = specs.map { |name, version, _| "#{name}-#{version}" }
+            missing = Dir.glob("'"$REPO_DIR"'/gems/*-'"$GEM_VERSION"'.gem").map { |f| File.basename(f, ".gem") }.reject { |g| indexed.include?(g) }
+            abort("::error::gems built this run but absent from the regenerated index: #{missing.join(", ")}") unless missing.empty?
+            fresh = indexed.grep(/#{Regexp.escape("'"$GEM_VERSION"'")}/)
+            abort("::error::no gems with version '"$GEM_VERSION"' in the index — the build produced nothing?") if fresh.empty?
+            puts "index OK: #{fresh.size} gems at '"$GEM_VERSION"' present"
+          '
+
+          # Traceability: the source manifest rides beside the index.
+          mkdir -p "$REPO_DIR/manifests"
+          cp "$GITHUB_WORKSPACE/manifest.json" "$REPO_DIR/manifests/$GEM_VERSION.json"
+
+          # Upload gems + index + manifest to the bucket (private; served via CloudFront).
           aws s3 sync "$REPO_DIR/" "s3://$BUCKET/" --no-progress
 
+          # Post-upload spot check: the freshly built gems must actually be in the bucket.
+          for gem_file in "$REPO_DIR"/gems/*-"$GEM_VERSION".gem; do
+            key="gems/$(basename "$gem_file")"
+            aws s3api head-object --bucket "$BUCKET" --key "$key" >/dev/null \
+              || { echo "::error::$key missing from s3://$BUCKET after sync"; exit 1; }
+          done
+
           # Invalidate the CloudFront cache so consumers see the fresh index immediately.
-          # Tolerant of the distribution not existing yet (e.g. before the infra is deployed).
+          # The distribution exists (rubygems.omarqureshi.net is live) — failing to find
+          # it means consumers silently serve a stale index, so fail loudly.
           DIST_ID=$(aws cloudfront list-distributions \
             --query "DistributionList.Items[?Aliases.Items[?@=='rubygems.omarqureshi.net']].Id | [0]" \
-            --output text 2>/dev/null || true)
-          if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
-            aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths '/*' >/dev/null
-            echo "Invalidated CloudFront distribution $DIST_ID"
-          else
-            echo "No CloudFront distribution for rubygems.omarqureshi.net yet; skipping invalidation."
+            --output text)
+          if [ -z "$DIST_ID" ] || [ "$DIST_ID" = "None" ]; then
+            echo "::error::no CloudFront distribution found for rubygems.omarqureshi.net — consumers will serve a stale index until this is resolved"
+            exit 1
           fi
-          echo "Published to https://rubygems.omarqureshi.net"
+          # Wait for the invalidation so downstream consumers (the smoke test,
+          # chained docs build) never race a stale CDN index.
+          INV_ID=$(aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths '/*' \
+            --query 'Invalidation.Id' --output text)
+          aws cloudfront wait invalidation-completed --distribution-id "$DIST_ID" --id "$INV_ID"
+          echo "Invalidated CloudFront distribution $DIST_ID (invalidation $INV_ID completed)"
+          echo "Published to https://rubygems.omarqureshi.net ($GEM_VERSION, manifest: manifests/$GEM_VERSION.json)"
+
+  # Consumer verification of the PUBLIC feed: install the just-published gems
+  # exactly as a stranger would (no GitHub auth anywhere) and synthesize a real
+  # stack. Until this passes, the publish is unverified; the blog deploy below
+  # covers the GitHub Packages channel the same way.
+  smoke-test:
+    needs: publish
+    runs-on: ubuntu-latest
+    env:
+      GEM_VERSION: ${{ needs.publish.outputs.gem_version }}
+    steps:
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4' # the oldest-but-one supported line — consumer-realistic
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Install from the public feed and synth a stack
+        run: |
+          set -euo pipefail
+          mkdir smoke && cd smoke
+          cat > Gemfile <<EOF
+          source "https://rubygems.org"
+          source "https://rubygems.omarqureshi.net" do
+            gem "aws-cdk-lib", "$GEM_VERSION"
+            gem "constructs", "$GEM_VERSION"
+            gem "jsii-ruby-runtime", "$GEM_VERSION"
+            gem "aws-cdk-asset-awscli-v1", "$GEM_VERSION"
+            gem "aws-cdk-asset-node-proxy-agent-v6", "$GEM_VERSION"
+            gem "aws-cdk-cloud-assembly-schema", "$GEM_VERSION"
+          end
+          EOF
+          # The kernel needs the Node sidecar: the gems ship no JS, so install
+          # @jsii/runtime locally and point JSII_RUNTIME at it (same pattern as
+          # deploy.yml). Bounded retry: the CloudFront invalidation the publish
+          # job issues can take a moment to propagate to the compact index.
+          npm install @jsii/runtime
+          for attempt in 1 2 3; do
+            bundle install && break
+            [ "$attempt" = "3" ] && { echo "::error::bundle install failed after 3 attempts"; exit 1; }
+            echo "bundle install attempt $attempt failed (stale CDN index?) — retrying in 30s"
+            sleep 30
+          done
+          export JSII_RUNTIME="$PWD/node_modules/@jsii/runtime/bin/jsii-runtime"
+          cat > synth.rb <<'RB'
+          require "aws-cdk-lib"
+          require "json"
+
+          app = AWSCDK::App.new
+          stack = AWSCDK::Stack.new(app, "SmokeStack")
+          AWSCDK::S3::Bucket.new(stack, "SmokeBucket", { versioned: true })
+          assembly = app.synth
+          template = JSON.parse(File.read(File.join(assembly.directory, "SmokeStack.template.json")))
+          types = template.fetch("Resources").values.map { |r| r.fetch("Type") }
+          raise "no S3 bucket in synthesized template: #{types.inspect}" unless types.include?("AWS::S3::Bucket")
+          puts "smoke OK: synthesized #{types.size} resource(s): #{types.uniq.join(", ")}"
+          RB
+          bundle exec ruby synth.rb
+
+      - name: Verify the source manifest is served
+        run: |
+          set -euo pipefail
+          curl -fsS -o manifest-check.json "https://rubygems.omarqureshi.net/manifests/$GEM_VERSION.json"
+          head -20 manifest-check.json
+
+  # The user-facing consumer test: deploy the blog on the fresh gems (its
+  # Gemfile pulls from GitHub Packages, covering the other feed). deploy.yml is
+  # dispatched with update_gems=true so it bundle-updates, deploys, and commits
+  # the refreshed Gemfile.lock back. GITHUB_TOKEN may create workflow_dispatch
+  # events, so no PAT is needed.
+  deploy-blog:
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch blog deploy on fresh gems
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main -f update_gems=true
+          echo "Dispatched deploy.yml with update_gems=true"

@@ -1,0 +1,7 @@
+{
+  "_comment": "targets.ruby naming for packages whose upstream repos do not carry it. Values are LOAD-BEARING: they become published gem/module names (permanent public API). Consumed by publish-packages.yml; changing anything here changes what consumers require.",
+  "constructs": { "gem": "constructs", "module": "Constructs" },
+  "asset-awscli-v1": { "gem": "aws-cdk-asset-awscli-v1", "module": "AwsCdkAssetAwscliV1" },
+  "asset-node-proxy-agent-v6": { "gem": "aws-cdk-asset-node-proxy-agent-v6", "module": "AwsCdkAssetNodeProxyAgentV6" },
+  "cloud-assembly-schema": { "gem": "aws-cdk-cloud-assembly-schema", "module": "AwsCdkCloudAssemblySchema" }
+}

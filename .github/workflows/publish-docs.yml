@@ -9,6 +9,17 @@ name: Publish Ruby CDK Docs
 
 on:
   workflow_dispatch:
+  # Chained after every successful gem publish so the docs can never silently
+  # trail the published gems (they read the latest gem off the feed).
+  workflow_run:
+    workflows: ["Publish Pre-release Packages"]
+    types: [completed]
+
+# Same group as publish-packages: the docs build reads the feed the publish
+# writes, so the two must never overlap. Never cancel a running publish.
+concurrency:
+  group: gem-publish
+  cancel-in-progress: false
 
 permissions:
   id-token: write
@@ -16,6 +27,9 @@ permissions:
 
 jobs:
   docs:
+    # For chained runs, only proceed when the publish actually succeeded;
+    # manual dispatches always run.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: production
     steps:

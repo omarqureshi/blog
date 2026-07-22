@@ -4,16 +4,35 @@ on:
   push:
     branches:
       - main
+  # Dispatched by publish-packages.yml after a verified gem publish. With
+  # update_gems=true the deploy floats to the freshly published gems and
+  # commits the refreshed Gemfile.lock back; plain pushes deploy on the
+  # committed lock, so a content change can never be broken by a bad nightly.
+  workflow_dispatch:
+    inputs:
+      update_gems:
+        description: "bundle update the CDK gems and commit the refreshed lock"
+        type: boolean
+        default: false
+
+# One deploy at a time: a publish-dispatched run can otherwise overlap a
+# content-push run — two concurrent `cdk deploy`s fight over the stack, and
+# the lock commit-back races the push. Never cancel a running deploy.
+concurrency:
+  group: blog-deploy
+  cancel-in-progress: false
 
 permissions:
   id-token: write # Required for requesting the JWT
-  contents: read  # Required for actions/checkout
+  contents: write # checkout + pushing the refreshed Gemfile.lock (update_gems runs)
   packages: read  # Required to download GitHub Packages
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
+    env:
+      UPDATE_GEMS: ${{ github.event_name == 'workflow_dispatch' && inputs.update_gems }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -38,7 +57,21 @@ jobs:
           npm ci
           npm run build
 
-      - name: Fetch Remote Gems
+      - name: Fetch Remote Gems (committed lock)
+        if: env.UPDATE_GEMS != 'true'
+        working-directory: blog/infra
+        env:
+          BUNDLE_RUBYGEMS__PKG__GITHUB__COM: omarqureshi:${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Deploy exactly what Gemfile.lock records — deterministic, and immune
+          # to whatever last night's gem build produced. frozen makes lock drift
+          # a loud failure instead of a silent re-resolution.
+          bundle config set --local path 'vendor/bundle'
+          bundle config set --local frozen true
+          bundle install
+
+      - name: Fetch Remote Gems (update to latest)
+        if: env.UPDATE_GEMS == 'true'
         working-directory: blog/infra
         env:
           BUNDLE_RUBYGEMS__PKG__GITHUB__COM: omarqureshi:${{ secrets.GITHUB_TOKEN }}
@@ -62,3 +95,23 @@ jobs:
           BUNDLE_RUBYGEMS__PKG__GITHUB__COM: omarqureshi:${{ secrets.GITHUB_TOKEN }}
           JSII_RUNTIME: ${{ github.workspace }}/blog/node_modules/@jsii/runtime/bin/jsii-runtime
         run: bundle exec cdk deploy --require-approval never
+
+      # Only after a successful deploy, so the committed lock always records a
+      # state that actually deployed. Pushes made with GITHUB_TOKEN do not
+      # retrigger the push-event deploy, so this cannot loop.
+      - name: Commit refreshed Gemfile.lock
+        if: env.UPDATE_GEMS == 'true'
+        working-directory: blog
+        run: |
+          if git diff --quiet infra/Gemfile.lock; then
+            echo "Gemfile.lock unchanged — nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add infra/Gemfile.lock
+          git commit -m "chore: record deployed gem versions in Gemfile.lock"
+          # main may have advanced during the deploy (checkout is minutes old).
+          git pull --rebase origin main
+          git push
+          echo "Committed refreshed Gemfile.lock"
