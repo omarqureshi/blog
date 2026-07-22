@@ -1,0 +1,7 @@
+python/.venv/
+ruby/vendor/
+ruby/node_modules/
+ruby/.bundle/
+ruby/Gemfile.lock
+ruby/package*.json
+cdk.out/
