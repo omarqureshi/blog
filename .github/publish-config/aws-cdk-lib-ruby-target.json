@@ -1,4 +1,9 @@
 {
+  "_source_of_truth": "packages/aws-cdk-lib/package.json jsii.targets.ruby on omarqureshi/aws-cdk ruby-language-bindings — this file is the publish guard's expected copy; acronym casing is CDK library data (compiler-validated, embedded in the assembly), and every consumer (pacmak, rosetta, docgen) reads it from the assembly rather than carrying its own list.",
+  "_decisions": {
+    "FSX": "deliberately FSX, not AWS's FSx branding: the acronym matcher is case-restoring over PascalCase and mixed-case tokens (like IPv4) are only used where the assembly declares them; module aws-fsx renders FSX. Changing this later renames published constants — breaking.",
+    "v2/V2": "version suffixes stay lowercase v2/v6 in gem names (aws-cdk-asset-node-proxy-agent-v6) and module casing follows PascalCase segmentation (V2 only where an acronym or explicit module name declares it). Matches dotnet's V2 at the type level but NOT in gem naming."
+  },
   "module": "AWSCDK",
   "acronyms": [
     "ACM",
