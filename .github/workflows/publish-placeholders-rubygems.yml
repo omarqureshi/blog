@@ -1,0 +1,67 @@
+# Pushes the placeholder gems (gem-placeholders/) to rubygems.org via OIDC
+# Trusted Publishing — no long-lived API key anywhere.
+#
+# How auth works: the job's GitHub OIDC token is exchanged for a short-lived
+# RubyGems API token by rubygems/configure-rubygems-credentials. For that
+# exchange to succeed, each gem on rubygems.org must have a Trusted Publisher
+# configured (gem page → "Trusted publishers" → Create) matching:
+#
+#   GitHub owner:      omarqureshi
+#   Repository:        blog
+#   Workflow filename: publish-placeholders-rubygems.yml
+#   Environment:       (leave empty)
+#
+# The push loop skips versions rubygems.org already has, so re-running is
+# safe and the workflow can sit dormant until a placeholder actually needs a
+# refresh (or, later, this becomes the pattern for real rubygems.org
+# releases at GA).
+name: publish-placeholders-rubygems
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write # OIDC token for the RubyGems credential exchange
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+
+      - name: Build placeholder gems
+        run: ruby gem-placeholders/generate.rb
+
+      - name: Configure RubyGems credentials (Trusted Publishing)
+        uses: rubygems/configure-rubygems-credentials@v1
+
+      - name: Push (skipping versions rubygems.org already has)
+        run: |
+          set -euo pipefail
+          for gem_file in gem-placeholders/pkg/*.gem; do
+            base=$(basename "$gem_file" .gem)
+            name=${base%-0.0.0.pre.reserved.*}
+            version=${base#"$name"-}
+            if curl -sf "https://rubygems.org/api/v1/versions/${name}.json" \
+                 | ruby -rjson -e 'exit JSON.parse($stdin.read).any? { |v| v["number"] == ARGV[0] } ? 0 : 1' "$version"; then
+              echo "skip: ${name} ${version} already published"
+            else
+              echo "push: ${name} ${version}"
+              gem push "$gem_file"
+            fi
+          done
+
+      - name: Verify
+        run: |
+          for gem_file in gem-placeholders/pkg/*.gem; do
+            name=$(basename "$gem_file" .gem | sed 's/-0\.0\.0\.pre\.reserved\..*//')
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://rubygems.org/api/v1/versions/${name}.json")
+            echo "${name}: versions endpoint HTTP ${code}"
+          done
