@@ -62,7 +62,10 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: omarqureshi/jsii-compiler
-          ref: ruby-language-bindings
+          # -self-publish carries fork-republish mechanics (the findPackageJsonUp
+          # scoped-name fix) on top of ruby-language-bindings, keeping the plain
+          # branch identical to the upstream PR (aws/jsii-compiler#2663) head.
+          ref: ruby-language-bindings-self-publish
           path: jsii-compiler
 
       - name: Checkout JSII Rosetta
