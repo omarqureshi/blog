@@ -356,6 +356,25 @@ jobs:
           node $ROOT_DIR/../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --rosetta-unknown-snippets translate --force-target -- .
           cd dist/ruby
           ls -la
+
+          # Single-gem UX: pin the co-published dependency set into the gemspec.
+          # pacmak omits assembly deps whose dependencyClosure entries lack
+          # targets.ruby (true for the npm-published constructs/asset assemblies
+          # baked into aws-cdk-lib's .jsii), and upstream semver ranges could not
+          # match the feed's 0.0.0.pre versions anyway. Exact pins to this build's
+          # sibling gems make `gem "aws-cdk-lib"` alone resolve the whole set.
+          test -f aws-cdk-lib.gemspec || { echo "::error::aws-cdk-lib.gemspec not in dist/ruby — dependency pinning needs it"; exit 1; }
+          DEP_PINS=""
+          for key in constructs asset-awscli-v1 asset-node-proxy-agent-v6 cloud-assembly-schema; do
+            DEP_GEM=$(jq -r ".\"$key\".gem" "$GITHUB_WORKSPACE/blog/.github/publish-config/ruby-targets.json")
+            [ "$DEP_GEM" = "null" ] && { echo "::error::no ruby-targets.json entry for '$key'"; exit 1; }
+            DEP_PINS="$DEP_PINS  s.add_dependency '$DEP_GEM', '= ${{ env.GEM_VERSION }}'\n"
+          done
+          sed -i "s/^end\$/${DEP_PINS}end/" aws-cdk-lib.gemspec
+          tail -n 8 aws-cdk-lib.gemspec
+          rm -f *.gem
+          gem build aws-cdk-lib.gemspec
+
           gem spec *.gem
           gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
 
@@ -458,15 +477,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir smoke && cd smoke
+          # Single gem only — everything else must arrive transitively via the
+          # exact dependency pins the publish job writes into the gemspec. This
+          # is the consumer UX we document, so the smoke test exercises it.
           cat > Gemfile <<EOF
           source "https://rubygems.org"
           source "https://rubygems.omarqureshi.net" do
             gem "aws-cdk-lib", "$GEM_VERSION"
-            gem "constructs", "$GEM_VERSION"
-            gem "jsii-ruby-runtime", "$GEM_VERSION"
-            gem "aws-cdk-asset-awscli-v1", "$GEM_VERSION"
-            gem "aws-cdk-asset-node-proxy-agent-v6", "$GEM_VERSION"
-            gem "aws-cdk-cloud-assembly-schema", "$GEM_VERSION"
           end
           EOF
           # The kernel needs the Node sidecar: the gems ship no JS, so install
