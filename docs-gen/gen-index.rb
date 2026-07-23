@@ -103,19 +103,19 @@ code = lambda do |text, lang = 'ruby'|
   %(<pre class="cb"><code>#{inner}</code></pre>)
 end
 
+# The exact preview build this docs site was generated from. Pinning the
+# exact version matters: preview builds are prerelease-versioned, and
+# bundler's resolver will not float a `>=` range onto a prerelease whose
+# pinned transitive deps are also prereleases (it backtracks to an older
+# build instead) — an exact pin sidesteps that entirely.
+gem_version = assembly.fetch('version').sub('-', '.pre.')
+
 gemfile = <<~RUBY
   source 'https://rubygems.org'
 
-  source 'https://rubygems.omarqureshi.net' do
-    gem 'aws-cdk-lib', '>= 0.0.0.pre'
-    gem 'constructs', '>= 0.0.0.pre'
-    gem 'jsii-ruby-runtime', '>= 0.0.0.pre'
-
-    # aws-cdk-lib requires these asset packages at load time:
-    gem 'aws-cdk-asset-awscli-v1', '>= 0.0.0.pre'
-    gem 'aws-cdk-asset-node-proxy-agent-v6', '>= 0.0.0.pre'
-    gem 'aws-cdk-cloud-assembly-schema', '>= 0.0.0.pre'
-  end
+  # Everything else (constructs, the asset packages, the jsii runtime)
+  # arrives as a pinned transitive dependency of this one gem.
+  gem 'aws-cdk-lib', '= #{gem_version}', source: 'https://rubygems.omarqureshi.net'
 RUBY
 
 stack = <<~RUBY
