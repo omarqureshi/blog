@@ -103,19 +103,16 @@ code = lambda do |text, lang = 'ruby'|
   %(<pre class="cb"><code>#{inner}</code></pre>)
 end
 
-# The exact preview build this docs site was generated from. Pinning the
-# exact version matters: preview builds are prerelease-versioned, and
-# bundler's resolver will not float a `>=` range onto a prerelease whose
-# pinned transitive deps are also prereleases (it backtracks to an older
-# build instead) — an exact pin sidesteps that entirely.
-gem_version = assembly.fetch('version').sub('-', '.pre.')
-
+# Preview builds are release-style versions (0.0.0.<timestamp>) since
+# 2026-07-24, so a bare requirement resolves the newest build directly —
+# no version incantation, and the lockfile pins reproducibility. Everything
+# else (constructs, the asset packages, the jsii runtime) arrives as an
+# exact-pinned transitive dependency of the one gem.
 gemfile = <<~RUBY
   source 'https://rubygems.org'
 
-  # Everything else (constructs, the asset packages, the jsii runtime)
-  # arrives as a pinned transitive dependency of this one gem.
-  gem 'aws-cdk-lib', '= #{gem_version}', source: 'https://rubygems.omarqureshi.net'
+  # The Ruby CDK preview — everything it needs comes with it.
+  gem 'aws-cdk-lib', source: 'https://rubygems.omarqureshi.net'
 RUBY
 
 stack = <<~RUBY

@@ -135,10 +135,15 @@ jobs:
           TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
           echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
           echo "NPM_VERSION=0.0.0-$TIMESTAMP" >> $GITHUB_ENV
-          echo "GEM_VERSION=0.0.0.pre.$TIMESTAMP" >> $GITHUB_ENV
-          echo "gem_version=0.0.0.pre.$TIMESTAMP" >> "$GITHUB_OUTPUT"
+          # Release-style gem versions (no ".pre."): prerelease versions defeat
+          # bundler's transitive resolution (prerelease gating), poison caches
+          # when constant, and break RBS's find_by_name signature discovery.
+          # 0.0.0.<timestamp> sorts below any real release and above every
+          # historical 0.0.0.pre.* build.
+          echo "GEM_VERSION=0.0.0.$TIMESTAMP" >> $GITHUB_ENV
+          echo "gem_version=0.0.0.$TIMESTAMP" >> "$GITHUB_OUTPUT"
 
-      # Traceability: 0.0.0.pre.<timestamp> alone says nothing about what was
+      # Traceability: 0.0.0.<timestamp> alone says nothing about what was
       # built. Record the exact source SHA of every checkout; uploaded beside the
       # gem index in the S3 publish step as manifests/<version>.json.
       - name: Record source manifest
@@ -257,7 +262,10 @@ jobs:
       - name: Publish jsii-ruby-runtime (RubyGem)
         working-directory: jsii/packages/@jsii/ruby-runtime
         run: |
-          jq ".version = \"${{ env.NPM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
+          # The gemspec reads package['version']; per-build versioning (instead
+          # of a constant 0.0.0) so a new runtime can never hide behind a stale
+          # cached copy of the same version string.
+          jq ".version = \"${{ env.GEM_VERSION }}\"" package.json > tmp.json && mv tmp.json package.json
           gem build jsii-ruby-runtime.gemspec
           gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
 
@@ -280,6 +288,12 @@ jobs:
           rm -rf dist/ruby
           node ../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --rosetta-unknown-snippets translate --force-target -- .
           cd dist/ruby
+          # Release-style version + exact runtime pin, then rebuild (pacmak
+          # derives a .pre. version from the npm-style assembly version).
+          G=$(ls *.gemspec)
+          sed -i "s/^  s.version     = '.*'/  s.version     = '${{ env.GEM_VERSION }}'/" "$G"
+          sed -i "s/^  s.add_dependency 'jsii-ruby-runtime', .*/  s.add_dependency 'jsii-ruby-runtime', '= ${{ env.GEM_VERSION }}'/" "$G"
+          rm -f *.gem && gem build "$G"
           gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
 
       - name: Publish AWS CDK (RubyGems)
@@ -332,6 +346,11 @@ jobs:
             rm -rf dist/ruby
             node $ROOT_DIR/../jsii/packages/jsii-pacmak/bin/jsii-pacmak -v -t ruby --rosetta-unknown-snippets translate --force-target -- .
             cd dist/ruby
+            # Release-style version + exact runtime pin, then rebuild.
+            G=$(ls *.gemspec)
+            sed -i "s/^  s.version     = '.*'/  s.version     = '${{ env.GEM_VERSION }}'/" "$G"
+            sed -i "s/^  s.add_dependency 'jsii-ruby-runtime', .*/  s.add_dependency 'jsii-ruby-runtime', '= ${{ env.GEM_VERSION }}'/" "$G"
+            rm -f *.gem && gem build "$G"
             gem push --key github --host https://rubygems.pkg.github.com/omarqureshi *.gem
           done
 
@@ -364,6 +383,10 @@ jobs:
           # match the feed's 0.0.0.pre versions anyway. Exact pins to this build's
           # sibling gems make `gem "aws-cdk-lib"` alone resolve the whole set.
           test -f aws-cdk-lib.gemspec || { echo "::error::aws-cdk-lib.gemspec not in dist/ruby — dependency pinning needs it"; exit 1; }
+          # Release-style version + exact runtime pin (pacmak derives a .pre.
+          # version from the npm-style assembly version).
+          sed -i "s/^  s.version     = '.*'/  s.version     = '${{ env.GEM_VERSION }}'/" aws-cdk-lib.gemspec
+          sed -i "s/^  s.add_dependency 'jsii-ruby-runtime', .*/  s.add_dependency 'jsii-ruby-runtime', '= ${{ env.GEM_VERSION }}'/" aws-cdk-lib.gemspec
           DEP_PINS=""
           for key in constructs asset-awscli-v1 asset-node-proxy-agent-v6 cloud-assembly-schema; do
             DEP_GEM=$(jq -r ".\"$key\".gem" "$GITHUB_WORKSPACE/blog/.github/publish-config/ruby-targets.json")
@@ -371,7 +394,7 @@ jobs:
             DEP_PINS="$DEP_PINS  s.add_dependency '$DEP_GEM', '= ${{ env.GEM_VERSION }}'\n"
           done
           sed -i "s/^end\$/${DEP_PINS}end/" aws-cdk-lib.gemspec
-          tail -n 8 aws-cdk-lib.gemspec
+          tail -n 10 aws-cdk-lib.gemspec
           rm -f *.gem
           gem build aws-cdk-lib.gemspec
 

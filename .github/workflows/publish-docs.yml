@@ -51,10 +51,12 @@ jobs:
         run: |
           set -euo pipefail
           FEED=https://rubygems.omarqureshi.net
+          # Preview builds are release-style (0.0.0.<timestamp>) since 2026-07-24,
+          # so they live in specs.4.8.gz; compare as Gem::Version, not strings.
           V=$(ruby -e 'require "zlib"; require "open-uri"; require "stringio"; \
-            d=URI.open("'"$FEED"'/prerelease_specs.4.8.gz").read; \
+            d=URI.open("'"$FEED"'/specs.4.8.gz").read; \
             s=Marshal.load(Zlib::GzipReader.new(StringIO.new(d)).read); \
-            puts s.select{|n,_,_| n=="aws-cdk-lib"}.map{|_,v,_| v.to_s}.sort.last')
+            puts s.select{|n,_,_| n=="aws-cdk-lib"}.map{|_,v,_| v}.max.to_s')
           echo "aws-cdk-lib version: $V"
           mkdir -p gem && cd gem
           curl -fsSL "$FEED/gems/aws-cdk-lib-$V.gem" -o g.gem
