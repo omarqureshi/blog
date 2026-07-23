@@ -1,0 +1,62 @@
+name: Bench (plain Linux)
+
+# Runs the Python-vs-Ruby CDK synth benchmark (bench/run.sh) on a stock
+# ubuntu runner. Exists to back the RFC #939 performance FAQ with numbers
+# from plain Linux, not just the WSL2 development host — methodology
+# nitpick closed. Manual trigger plus a monthly cron so drift in either
+# ecosystem shows up without babysitting.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 3 * *" # monthly, 3rd at 04:00 UTC
+
+permissions:
+  contents: read # Required for actions/checkout
+
+concurrency:
+  group: bench
+  cancel-in-progress: false
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # run.sh measures with GNU time (%e / %M), which stock runners lack.
+      - name: Install GNU time
+        run: sudo apt-get update -q && sudo apt-get install -y -q time
+
+      - name: Run benchmark
+        run: ./bench/run.sh 5 | tee bench-results.txt
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "## Bench results (ubuntu-latest)"
+            echo '```'
+            cat bench-results.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: bench-results
+          path: bench-results.txt
+          retention-days: 90
