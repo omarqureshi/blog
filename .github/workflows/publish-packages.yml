@@ -432,10 +432,16 @@ jobs:
           gem generate_index --directory "$REPO_DIR"
 
           # Reconciliation guard: every gem built this run (i.e. everything pushed to
-          # GitHub Packages above) must appear in the regenerated prerelease index —
-          # otherwise the two feeds silently diverge. Fail before uploading anything.
+          # GitHub Packages above) must appear in the regenerated index — otherwise
+          # the two feeds silently diverge. Fail before uploading anything. Both
+          # index files are checked: release-style build versions (0.0.0.<ts>,
+          # since 2026-07-24) live in specs.4.8.gz, historical .pre. builds in
+          # prerelease_specs.4.8.gz.
           ruby -rzlib -rstringio -e '
-            specs = Marshal.load(Zlib::GzipReader.new(StringIO.new(File.binread("'"$REPO_DIR"'/prerelease_specs.4.8.gz"))).read)
+            specs = %w[specs.4.8.gz prerelease_specs.4.8.gz].flat_map { |f|
+              path = File.join("'"$REPO_DIR"'", f)
+              File.exist?(path) ? Marshal.load(Zlib::GzipReader.new(StringIO.new(File.binread(path))).read) : []
+            }
             indexed = specs.map { |name, version, _| "#{name}-#{version}" }
             missing = Dir.glob("'"$REPO_DIR"'/gems/*-'"$GEM_VERSION"'.gem").map { |f| File.basename(f, ".gem") }.reject { |g| indexed.include?(g) }
             abort("::error::gems built this run but absent from the regenerated index: #{missing.join(", ")}") unless missing.empty?
