@@ -35,10 +35,13 @@ not hidden). Medians of 5; memory is `/proc` VmHWM self-reported by each app
 | process-tree peak | 175 MB | 142 MB |
 
 Reading: end-to-end synth UX is comparable (~0.7s slower on this stack).
-Ruby's lazy-loading architecture makes `require "aws-cdk-lib"` ~2× faster
-than Python's imports **and** the guest process a third smaller (only the
-generated files a program touches are ever loaded — 67 of 613 module files in
-this run).
+Against the 2.261.0 PyPI build, Ruby's lazy-loading architecture makes
+`require "aws-cdk-lib"` ~2× faster than Python's imports and the guest
+process a third smaller (only the generated files a program touches are ever
+loaded — 67 of 613 module files in this run). Note however that both of
+those deltas are largely a property of *build vintage*, not language — see
+the same-source control below, where Python built from main closes both
+gaps.
 
 ## Where the synth gap comes from (profiled 2026-07-23)
 
@@ -74,6 +77,38 @@ Evidence chain:
 
 When the upstream feature reaches a tagged release, the Python column will
 pay the same ~1.1s and the synth rows will converge.
+
+## Same-source control: Python built from main (2026-07-23)
+
+To close the loop we generated Python bindings from the *identical* fork
+build (`jsii-pacmak -t python --code-only` on the same npm package that
+produced the Ruby gem, installed into a fresh venv over PyPI `jsii` 1.139.0)
+and ran the same mirror app, 5 iterations:
+
+| | Python 2.261.0 (PyPI) | Python from main | Ruby from main |
+| --- | --- | --- | --- |
+| library load | 0.98 s | 0.44 s | 0.46 s |
+| construct | 0.26 s | 0.35 s | 0.30 s |
+| synth | 0.09 s | **1.06 s** | 1.15 s |
+| in-process total | ~1.3 s | 1.85 s | ~1.9 s |
+| guest process peak | 128 MB | 83 MB | 86 MB |
+| Node sidecar peak | 47 MB | 47 MB | 56 MB |
+
+Same source, same story: Python's synth pays the validation engine too
+(1.06s vs Ruby's 1.15s), its import gets ~2× faster, and its guest process
+drops to 83 MB — main's Python codegen is lazier than what shipped in
+2.261.0. On equal footing the honest headline is **parity**: library load
+0.44 vs 0.46s, synth 1.06 vs 1.15s, guest 83 vs 86 MB. The earlier
+"Ruby loads ~2× faster and is a third smaller" reading compared against
+2.261.0's eager Python build and does not survive the same-source control.
+
+Methodology caveats: the Python-from-main packages were installed with
+`--no-deps` over the 2.261.0 dependency tree because fork pacmak emits a
+`jsii<0.0.1` requirement (the fork toolchain's 0.0.0 version), and the
+numeric-only prerelease `0.0.0-20260722115628` gets converted to the
+invalid PEP440 string `0.0.0.` (pacmak bug; patched to
+`0.0.0.dev20260722115628` in the generated `setup.py` before install).
+Neither affects runtime behaviour.
 
 **Measurement post-mortem (2026-07-23):** an earlier revision reported Ruby at
 478 MB peak RSS via GNU time `%M`. That number was a WSL2 accounting artifact:
