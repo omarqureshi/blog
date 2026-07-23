@@ -5,3 +5,4 @@ ruby/.bundle/
 ruby/Gemfile.lock
 ruby/package*.json
 cdk.out/
+__pycache__/

@@ -56,8 +56,27 @@ t2 = time.perf_counter()
 app.synth()
 t3 = time.perf_counter()
 
+def _hwm_mb(pid):
+    try:
+        with open(f"/proc/{pid}/status") as f:
+            for line in f:
+                if line.startswith("VmHWM"):
+                    return int(line.split()[1]) // 1024
+    except FileNotFoundError:
+        return None
+
+def _children(pid):
+    kids = []
+    for t in os.listdir(f"/proc/{pid}/task"):
+        with open(f"/proc/{pid}/task/{t}/children") as f:
+            kids += [int(x) for x in f.read().split()]
+    return kids
+
+_kids = _children(os.getpid())
 json.dump(
-    {"import_s": t1 - t0, "construct_s": t2 - t1, "synth_s": t3 - t2, "total_s": t3 - t0},
+    {"import_s": t1 - t0, "construct_s": t2 - t1, "synth_s": t3 - t2, "total_s": t3 - t0,
+     "guest_hwm_mb": _hwm_mb(os.getpid()),
+     "sidecar_hwm_mb": max((_hwm_mb(k) or 0) for k in _kids) if _kids else None},
     sys.stderr,
 )
 sys.stderr.write("\n")

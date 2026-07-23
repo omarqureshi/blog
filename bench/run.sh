@@ -58,15 +58,18 @@ bench() { # $1 = label, $2... = command
   for i in $(seq 1 "$N"); do
     local line; line=$(run_one "$label" "$@")
     local wall; wall=$(echo "$line" | cut -d'|' -f1)
-    local mem; mem=$(echo "$line" | cut -d'|' -f2)
     local phases_json; phases_json=$(echo "$line" | cut -d'|' -f3)
     local res; res=$(echo "$line" | cut -d'|' -f4)
+    # Memory comes from the apps' self-reported /proc VmHWM (guest + sidecar):
+    # GNU time's %M is unreliable on WSL2 (it once reported 486MB for an
+    # 86MB process tree) and is ignored.
+    local mem; mem=$(echo "$phases_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("guest_hwm_mb") or 0) + (d.get("sidecar_hwm_mb") or 0))')
     walls+=("$wall"); rss+=("$mem")
-    echo "  run $i: wall=${wall}s rss=$((mem / 1024))MB resources=${res} phases=${phases_json}"
+    echo "  run $i: wall=${wall}s tree_hwm=${mem}MB resources=${res} phases=${phases_json}"
   done
   local median_wall; median_wall=$(printf '%s\n' "${walls[@]}" | sort -n | awk '{a[NR]=$1} END {print a[int((NR+1)/2)]}')
-  local median_rss; median_rss=$(printf '%s\n' "${rss[@]}" | sort -n | awk '{a[NR]=$1} END {print int(a[int((NR+1)/2)]/1024)}')
-  echo "  median: wall=${median_wall}s rss=${median_rss}MB"
+  local median_rss; median_rss=$(printf '%s\n' "${rss[@]}" | sort -n | awk '{a[NR]=$1} END {print a[int((NR+1)/2)]}')
+  echo "  median: wall=${median_wall}s tree_hwm=${median_rss}MB"
 }
 
 bench "python" "$PY" python/app.py

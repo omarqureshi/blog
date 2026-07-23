@@ -47,4 +47,7 @@ t2 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 app.synth
 t3 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
-warn JSON.generate({ import_s: t1 - t0, construct_s: t2 - t1, synth_s: t3 - t2, total_s: t3 - t0 })
+hwm = ->(pid) { File.read("/proc/#{pid}/status")[/VmHWM:\s+(\d+)/, 1].to_i / 1024 }
+node_pid = Jsii::Kernel.instance.instance_variable_get(:@wait_thr)&.pid
+warn JSON.generate({ import_s: t1 - t0, construct_s: t2 - t1, synth_s: t3 - t2, total_s: t3 - t0,
+                     guest_hwm_mb: hwm.call(Process.pid), sidecar_hwm_mb: node_pid ? hwm.call(node_pid) : nil })
