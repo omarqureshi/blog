@@ -38,8 +38,42 @@ Reading: end-to-end synth UX is comparable (~0.7s slower on this stack).
 Ruby's lazy-loading architecture makes `require "aws-cdk-lib"` ~2× faster
 than Python's imports **and** the guest process a third smaller (only the
 generated files a program touches are ever loaded — 67 of 613 module files in
-this run); the deferred cost appears in the synth phase, where
-lazily-referenced types hydrate through the kernel.
+this run).
+
+## Where the synth gap comes from (profiled 2026-07-23)
+
+The 1.15s-vs-0.09s synth row is **not a Ruby or jsii cost — it is version
+skew in aws-cdk-lib itself.** The Ruby preview gem is built from `aws-cdk`
+`main`, where `app.synth()` now always runs the default CloudFormation
+validation engine (`@aws/cloudformation-validate` — a WebAssembly-compiled
+Rego policy engine, `core/lib/validation/cloudformation-validate-plugin.js`).
+Python's 2.261.0 PyPI release predates the feature.
+
+Evidence chain:
+
+1. A V8 CPU profile of the Node sidecar during the Ruby synth showed ~50%
+   anonymous WASM frames + ~20% GC; walking the call tree resolved the WASM
+   caller to `WasmRegoEngine` → `CloudFormationValidatePlugin` →
+   `synthesis-validation.js` inside `app.synth()`.
+2. A pure-Node control (identical one-bucket app in plain JavaScript, no
+   jsii guest at all, both libraries loaded from the jsii package cache with
+   their dependency closures) reproduces the entire gap:
+
+   | | preview build (main) | release 2.261.0 |
+   | --- | --- | --- |
+   | require | 7 ms | 6 ms |
+   | construct | ~100 ms | ~100 ms |
+   | **synth** | **~1,100 ms** | **~28 ms** |
+
+3. Splitting the cost on the preview build: engine initialisation (WASM
+   compile + rule load) ≈ 0.6s, template evaluation ≈ 0.6s — and the cost is
+   near-fixed (a 1-bucket app pays ~1.1s, the 64-resource app ~1.15s).
+4. Net jsii overhead in the synth phase after subtracting the library's own
+   cost: Ruby ≈ 0.1s, Python ≈ 0.06s — equivalent. The kernel wire trace
+   agrees: synth is a single `invoke`, with 0.001s of Ruby-side CPU.
+
+When the upstream feature reaches a tagged release, the Python column will
+pay the same ~1.1s and the synth rows will converge.
 
 **Measurement post-mortem (2026-07-23):** an earlier revision reported Ruby at
 478 MB peak RSS via GNU time `%M`. That number was a WSL2 accounting artifact:
