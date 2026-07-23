@@ -21,8 +21,9 @@
 # after each yank.
 #
 # MUST RUN INTERACTIVELY: the gem carries rubygems_mfa_required, so yank and
-# re-push prompt for an OTP. Run it from a terminal (in a Claude session:
-# `! gem-placeholders/yank-experiment.sh`).
+# re-push prompt for an OTP (expect ~5 prompts). Run it from a regular
+# terminal window — piped/non-tty contexts are refused at startup, and the
+# results land in yank-experiment-<timestamp>.log either way.
 #
 # Limitation stated up front: with a single account we cannot test whether a
 # *different* account could claim the fully-yanked name. The owners-endpoint
@@ -31,7 +32,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-NAME="${NAME:-omars-test-gem}"
+# Fixed name, deliberately NOT overridable via environment: a stray NAME env
+# var (observed in practice) must never redirect this experiment.
+NAME="omars-test-gem"
 V1="0.0.0.pre.reserved.1"
 V2="0.0.0.pre.reserved.2"
 RFC_URL="https://github.com/aws/aws-cdk-rfcs/pull/939"
@@ -45,10 +48,20 @@ case "$NAME" in
     ;;
 esac
 
+# The gem CLI prompts for OTP codes on stdin; without a terminal the pushes
+# and yanks fail mid-experiment. Refuse to start at all.
+if ! [ -t 0 ]; then
+  echo "This experiment needs an interactive terminal (MFA OTP prompts)." >&2
+  echo "Run it from a regular shell, not a piped/non-tty context." >&2
+  exit 1
+fi
+
 log() { printf '%s\n' "$*" | tee -a "$LOG"; }
 run() { log ""; log "\$ $*"; "$@" 2>&1 | tee -a "$LOG"; }
 
-capture() { # capture <label> <url>  — log status code + body
+http_code() { curl -s -o /dev/null -w '%{http_code}' "$1"; }
+
+capture() { # capture <label> <url>  — log status code + body (evidence only)
   local label=$1 url=$2 body code
   body=$(curl -s -w '\n%{http_code}' "$url")
   code=${body##*$'\n'}
@@ -57,7 +70,6 @@ capture() { # capture <label> <url>  — log status code + body
   log "== $label"
   log "GET $url -> HTTP $code"
   log "$body"
-  echo "$code"
 }
 
 wait_for() { # wait_for <expected-code> <url> <what>  — poll up to 3 minutes
@@ -81,8 +93,10 @@ log "gem name: $NAME   versions: $V1 -> yank -> $V2 -> yank"
 # ---- phase 0: preflight ----------------------------------------------------
 log ""
 log "#### PHASE 0: preflight"
-gemcode=$(capture "name availability (gems endpoint)" "$GEMS_URL")
-vercode=$(capture "name availability (versions endpoint)" "$VERSIONS_URL")
+capture "name availability (gems endpoint)" "$GEMS_URL"
+capture "name availability (versions endpoint)" "$VERSIONS_URL"
+gemcode=$(http_code "$GEMS_URL")
+vercode=$(http_code "$VERSIONS_URL")
 if [ "$gemcode" = "200" ] || [ "$vercode" = "200" ]; then
   log "'$NAME' already exists on rubygems.org."
   log "If this is a previous run of this experiment, delete/skip manually; refusing to guess."
@@ -138,17 +152,17 @@ log "#### PHASE 1: reserve (push $V1)"
 build_gem "$V1"
 run gem push "$BUILT"
 wait_for 200 "$VERSIONS_URL" "push indexed"
-capture "post-push versions" "$VERSIONS_URL" >/dev/null
-capture "post-push owners" "$OWNERS_URL" >/dev/null
+capture "post-push versions" "$VERSIONS_URL"
+capture "post-push owners" "$OWNERS_URL"
 
 # ---- phase 2: yank ---------------------------------------------------------
 log ""
 log "#### PHASE 2: yank $V1 (name becomes fully yanked)"
 run gem yank "$NAME" -v "$V1"
 wait_for 404 "$VERSIONS_URL" "yank reflected"
-capture "post-yank gems endpoint" "$GEMS_URL" >/dev/null
-capture "post-yank versions endpoint" "$VERSIONS_URL" >/dev/null
-capture "post-yank owners endpoint (KEY EVIDENCE: does ownership persist?)" "$OWNERS_URL" >/dev/null
+capture "post-yank gems endpoint" "$GEMS_URL"
+capture "post-yank versions endpoint" "$VERSIONS_URL"
+capture "post-yank owners endpoint (KEY EVIDENCE: does ownership persist?)" "$OWNERS_URL"
 
 # ---- phase 3: can we reserve again? ----------------------------------------
 log ""
@@ -164,17 +178,17 @@ log "#### PHASE 3b: push a NEW version $V2 (tests whether the owner can still us
 build_gem "$V2"
 run gem push "$BUILT"
 wait_for 200 "$VERSIONS_URL" "re-reservation indexed"
-capture "post-re-push versions" "$VERSIONS_URL" >/dev/null
-capture "post-re-push owners" "$OWNERS_URL" >/dev/null
+capture "post-re-push versions" "$VERSIONS_URL"
+capture "post-re-push owners" "$OWNERS_URL"
 
 # ---- phase 4: cleanup ------------------------------------------------------
 log ""
 log "#### PHASE 4: cleanup (yank $V2; final state = fully-yanked, still owned)"
 run gem yank "$NAME" -v "$V2"
 wait_for 404 "$VERSIONS_URL" "cleanup yank reflected"
-capture "final gems endpoint" "$GEMS_URL" >/dev/null
-capture "final versions endpoint" "$VERSIONS_URL" >/dev/null
-capture "final owners endpoint" "$OWNERS_URL" >/dev/null
+capture "final gems endpoint" "$GEMS_URL"
+capture "final versions endpoint" "$VERSIONS_URL"
+capture "final owners endpoint" "$OWNERS_URL"
 
 log ""
 log "#### DONE — evidence in $LOG"
