@@ -477,14 +477,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir smoke && cd smoke
-          # Single gem only — everything else must arrive transitively via the
-          # exact dependency pins the publish job writes into the gemspec. This
-          # is the consumer UX we document, so the smoke test exercises it.
+          # Single gem, inline source — everything else must arrive transitively
+          # via the exact dependency pins the publish job writes into the
+          # gemspec. This is the one-line consumer UX we document, so the smoke
+          # test exercises exactly that form.
           cat > Gemfile <<EOF
           source "https://rubygems.org"
-          source "https://rubygems.omarqureshi.net" do
-            gem "aws-cdk-lib", "$GEM_VERSION"
-          end
+
+          gem "aws-cdk-lib", "$GEM_VERSION", source: "https://rubygems.omarqureshi.net"
           EOF
           # The kernel needs the Node sidecar: the gems ship no JS, so install
           # @jsii/runtime locally and point JSII_RUNTIME at it (same pattern as
