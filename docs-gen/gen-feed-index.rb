@@ -20,11 +20,9 @@
 require 'zlib'
 require 'stringio'
 require 'rubygems'
-require 'fileutils'
 require_relative 'render'
 
 repo_dir = ARGV[0] or abort('usage: gen-feed-index.rb <repo-dir>')
-script_dir = __dir__
 
 def load_specs(path)
   return [] unless File.exist?(path)
@@ -78,6 +76,6 @@ html = Render.page('feed-index',
 
 out = File.join(repo_dir, 'index.html')
 File.write(out, html)
-# Ship the stylesheet next to it so `aws s3 sync` uploads both to the feed root.
-FileUtils.cp(File.join(script_dir, 'feed-index.css'), File.join(repo_dir, 'feed-index.css'))
-warn "wrote #{out} (+ feed-index.css): #{total_gems} gems, #{total_versions} versions"
+# Stylesheets are served from the canonical /styles/ path (deployed separately),
+# linked protocol-relative — not copied next to the page.
+warn "wrote #{out}: #{total_gems} gems, #{total_versions} versions"

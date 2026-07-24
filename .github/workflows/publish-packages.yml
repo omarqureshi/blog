@@ -463,6 +463,13 @@ jobs:
           # Upload gems + index + manifest to the bucket (private; served via CloudFront).
           aws s3 sync "$REPO_DIR/" "s3://$BUCKET/" --no-progress
 
+          # Refresh the shared site stylesheets at the canonical /styles/ path
+          # (every page links these protocol-relative). The /* invalidation below
+          # covers /styles/. A dedicated publish-styles.yml does the same for
+          # fast CSS-only edits.
+          aws s3 sync "$GITHUB_WORKSPACE/blog/docs-gen" "s3://$BUCKET/styles/" \
+            --exclude "*" --include "*.css" --content-type "text/css" --no-progress
+
           # Post-upload spot check: the freshly built gems must actually be in the bucket.
           for gem_file in "$REPO_DIR"/gems/*-"$GEM_VERSION".gem; do
             key="gems/$(basename "$gem_file")"

@@ -185,6 +185,9 @@ File.write(File.join(awscdk, 'index.html'), Render.page('docs-index',
   deploy_html: code.call(deploy, 'console'),
   generated_on: Time.now.strftime('%a %b %d %H:%M:%S %Y')))
 
+# Stylesheets are served from the canonical /styles/ path (deployed separately),
+# linked protocol-relative — not copied next to the page.
+
 # Redirect the site root to the API index (overwrites YARD's leftover root index.html).
 File.write(File.join(out_dir, 'index.html'), Render.page('docs-redirect'))
 

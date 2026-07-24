@@ -2,17 +2,19 @@
    AWS CDK for Ruby — docs theme
    Loaded as YARD's common.css (last, so it overrides style.css).
    Re-skins the generated class pages to match the index/landing pages.
+   The universal palette comes from the shared tokens.css (imported below);
+   only YARD's own code-highlighting colours + --code-bg live here. Baked into
+   the YARD tree, so the @import is an absolute /styles/ URL.
    =================================================================== */
+@import url("//rubygems.omarqureshi.net/styles/tokens.css");
+
 :root {
-  color-scheme: light dark;
-  --bg: #fbfbfc; --ink: #1a1a1e; --muted: #70707a; --line: #e6e6ea;
-  --accent: #cc342d; --panel: #f4f4f6; --code-bg: #f6f6f8;
+  --code-bg: #f6f6f8;
   --tok-const: #2d7dd2; --tok-str: #157f3b; --tok-sym: #7a5cd0; --tok-num: #c26a1e; --tok-label: #0e8a6f;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #131317; --ink: #e9e9ee; --muted: #9a9aa6; --line: #2a2a33;
-    --accent: #e2564f; --panel: #1b1b21; --code-bg: #1b1b21;
+    --code-bg: #1b1b21;
     --tok-const: #66b2ff; --tok-str: #5cc98a; --tok-sym: #b39dff; --tok-num: #e0975a; --tok-label: #3dd6b0;
   }
 }

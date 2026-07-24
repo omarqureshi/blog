@@ -1,0 +1,54 @@
+name: Publish Styles (fast)
+
+# Deploys the shared site stylesheets (docs-gen/*.css) to the canonical
+# /styles/ path on rubygems.omarqureshi.net. Every page — the gem-feed
+# landing, the docs landing, and (via @import) the YARD class pages — links
+# these protocol-relative from //rubygems.omarqureshi.net/styles/. One source,
+# one deployed location. Fast loop for CSS-only edits; the feed publish also
+# refreshes /styles/ on every gem publish.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: gem-publish
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  styles:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout blog
+        uses: actions/checkout@v6
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKRole
+          aws-region: us-east-1
+
+      - name: Sync stylesheets to /styles + invalidate
+        run: |
+          set -euo pipefail
+          BUCKET=aws-cdk-ruby-gems
+          aws s3 sync docs-gen s3://$BUCKET/styles/ \
+            --exclude "*" --include "*.css" --content-type "text/css" --no-progress
+          echo "styles now at s3://$BUCKET/styles/:"
+          aws s3 ls "s3://$BUCKET/styles/"
+          DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?contains(Aliases.Items, 'rubygems.omarqureshi.net')].Id | [0]" \
+            --output text)
+          if [ "$DIST_ID" != "None" ] && [ -n "$DIST_ID" ]; then
+            INV_ID=$(aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
+              --paths '/styles/*' --query 'Invalidation.Id' --output text)
+            aws cloudfront wait invalidation-completed --distribution-id "$DIST_ID" --id "$INV_ID"
+            echo "invalidated /styles/* on $DIST_ID"
+          else
+            echo "::error::no CloudFront distribution for rubygems.omarqureshi.net"
+            exit 1
+          fi
