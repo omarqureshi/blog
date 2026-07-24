@@ -454,6 +454,12 @@ jobs:
           mkdir -p "$REPO_DIR/manifests"
           cp "$GITHUB_WORKSPACE/manifest.json" "$REPO_DIR/manifests/$GEM_VERSION.json"
 
+          # Human-facing landing page for the feed root: install snippet + every
+          # published gem and version (from the compact index just regenerated).
+          # Writes index.html + feed-index.css into $REPO_DIR so the sync uploads
+          # them; the CloudFront index-rewrite function serves index.html at "/".
+          ruby "$GITHUB_WORKSPACE/blog/docs-gen/gen-feed-index.rb" "$REPO_DIR"
+
           # Upload gems + index + manifest to the bucket (private; served via CloudFront).
           aws s3 sync "$REPO_DIR/" "s3://$BUCKET/" --no-progress
 
