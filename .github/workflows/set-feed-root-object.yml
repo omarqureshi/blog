@@ -1,0 +1,65 @@
+name: Set feed CloudFront default root object
+
+# One-shot, idempotent: point the rubygems.omarqureshi.net distribution's
+# Default Root Object at index.html so the bare "/" serves the feed landing
+# page. The viewer-request function only appends index.html to "/foo/"-style
+# subpaths, not to the root, so "/" 403s from S3 without this. Safe to re-run;
+# a no-op once the value is already index.html. Kept out of the publish
+# pipeline (it mutates distribution config — a one-time infra change, not a
+# per-build step).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: feed-cloudfront-config
+  cancel-in-progress: false
+
+jobs:
+  set-root-object:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKRole
+          aws-region: us-east-1
+
+      - name: Ensure DefaultRootObject = index.html
+        run: |
+          set -euo pipefail
+          DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Aliases.Items[?@=='rubygems.omarqureshi.net']].Id | [0]" \
+            --output text)
+          if [ -z "$DIST_ID" ] || [ "$DIST_ID" = "None" ]; then
+            echo "::error::no CloudFront distribution found for rubygems.omarqureshi.net"
+            exit 1
+          fi
+          echo "Distribution: $DIST_ID"
+
+          aws cloudfront get-distribution-config --id "$DIST_ID" > dc.json
+          ETAG=$(jq -r '.ETag' dc.json)
+          CURRENT=$(jq -r '.DistributionConfig.DefaultRootObject' dc.json)
+          echo "Current DefaultRootObject: '${CURRENT}'"
+
+          if [ "$CURRENT" = "index.html" ]; then
+            echo "Already set — nothing to do."
+            exit 0
+          fi
+
+          jq '.DistributionConfig | .DefaultRootObject = "index.html"' dc.json > new-config.json
+          aws cloudfront update-distribution \
+            --id "$DIST_ID" \
+            --distribution-config file://new-config.json \
+            --if-match "$ETAG" >/dev/null
+          echo "Set DefaultRootObject = index.html"
+
+          # Invalidate the root so the change is visible immediately.
+          INV_ID=$(aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
+            --paths '/' '/index.html' --query 'Invalidation.Id' --output text)
+          aws cloudfront wait invalidation-completed --distribution-id "$DIST_ID" --id "$INV_ID"
+          echo "Invalidated / (invalidation $INV_ID)"
