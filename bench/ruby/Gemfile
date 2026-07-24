@@ -2,8 +2,7 @@
 
 source "https://rubygems.org"
 
-# Exact pin: the pinned transitive closure (constructs, asset packages, jsii
-# runtime) rides in on this one gem. A ">=" range will NOT float onto new
-# preview builds — bundler backtracks off prerelease transitive pins — so
-# bump this version explicitly when adopting a newer build.
-gem "aws-cdk-lib", "= 0.0.0.pre.20260723215643", source: "https://rubygems.omarqureshi.net"
+# The Ruby CDK preview: release-style build versions (0.0.0.<timestamp>), so a
+# bare requirement resolves the newest build; the pinned transitive closure
+# (constructs, asset packages, jsii runtime) rides in with it.
+gem "aws-cdk-lib", source: "https://rubygems.omarqureshi.net"
