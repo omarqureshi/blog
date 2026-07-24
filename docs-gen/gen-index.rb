@@ -174,8 +174,9 @@ getting_started = <<~HTML
     </ul>
 
     <h3>Gemfile</h3>
-    <p>The gems are published to <code>https://rubygems.omarqureshi.net</code>. During the
-    preview they're pre-release, hence the <code>>= 0.0.0.pre</code> constraint. Then
+    <p>The gems are published to <code>https://rubygems.omarqureshi.net</code>. One line is the
+    whole story — everything the CDK needs arrives as pinned transitive dependencies, and
+    <code>bundle update aws-cdk-lib</code> adopts a newer preview build. Then
     <code>bundle install</code>.</p>
     #{code.call(gemfile)}
 
