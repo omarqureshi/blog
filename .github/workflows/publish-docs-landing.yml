@@ -1,0 +1,105 @@
+name: Publish Docs Landing (fast)
+
+# Regenerates ONLY the hand-edited docs landing — the AWSCDK root page
+# (getting-started, install snippet, name-mapping notes, module list) and the
+# /docs/ redirect — and deploys just those two files. It does NOT rebuild the
+# per-class API docs (the ~1h YARD build) or the per-module landing pages.
+#
+# Why only the root landing: the per-module landings are derived from the built
+# class tree — gen-module-landing.rb lifts each module's README out of its
+# YARD-rendered page — so they cannot be regenerated without a full build.
+# gen-index.rb, by contrast, needs only the published assembly, so it runs in
+# seconds. Use this for iterating on the landing copy; use "Publish Ruby CDK
+# Docs" (the full build) when class docs or module landings must change.
+
+on:
+  workflow_dispatch:
+
+# Shared with the gem publish + full docs build: all three write under /docs on
+# the same distribution, so they must never overlap. Never cancel a running one.
+concurrency:
+  group: gem-publish
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  landing:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout blog (docs-gen scripts)
+        uses: actions/checkout@v6
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Install rouge
+        # gen-index.rb highlights the getting-started code blocks with Rouge
+        # (optional at runtime, but the published page should have highlighting).
+        run: gem install rouge --no-document
+
+      - name: Download the assembly from the feed
+        run: |
+          set -euo pipefail
+          FEED=https://rubygems.omarqureshi.net
+          V=$(ruby -e 'require "zlib"; require "open-uri"; require "stringio"; \
+            d=URI.open("'"$FEED"'/specs.4.8.gz").read; \
+            s=Marshal.load(Zlib::GzipReader.new(StringIO.new(d)).read); \
+            puts s.select{|n,_,_| n=="aws-cdk-lib"}.map{|_,v,_| v}.max.to_s')
+          echo "aws-cdk-lib version: $V"
+          mkdir -p gem && cd gem
+          curl -fsSL "$FEED/gems/aws-cdk-lib-$V.gem" -o g.gem
+          tar xf g.gem
+          # Extract only the jsii tarball (not the ~11k-file lib/ tree — gen-index
+          # reads just the assembly), then unpack the assembly from it.
+          tar xzf data.tar.gz --wildcards 'lib/*.jsii.tgz'
+          mkdir -p asm && tar xzf lib/aws-cdk-lib@*.jsii.tgz -C asm
+          echo "ASSEMBLY=$PWD/asm/package/.jsii.gz" >> "$GITHUB_ENV"
+
+      - name: Generate the landing
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/landing"
+          rm -rf "$OUT"; mkdir -p "$OUT"
+          # Assembly-driven: no class tree present, so treat every module/type as
+          # linked (the live site always full-builds all modules).
+          DOCS_ASSUME_BUILT=1 ruby docs-gen/gen-index.rb "$ASSEMBLY" "$OUT"
+          # Guard: gen-index must produce exactly the two surrounding files and
+          # nothing that could clobber a class page on sync.
+          test -f "$OUT/AWSCDK/index.html" || { echo "::error::AWSCDK/index.html not generated"; exit 1; }
+          test -f "$OUT/index.html"        || { echo "::error::/docs/index.html redirect not generated"; exit 1; }
+          stray=$(find "$OUT" -type f ! -name index.html | head -1)
+          [ -n "$stray" ] && { echo "::error::unexpected non-index file generated: $stray"; exit 1; }
+          echo "DOCS_OUT=$OUT" >> "$GITHUB_ENV"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKRole
+          aws-region: us-east-1
+
+      - name: Sync landing to S3 + invalidate
+        run: |
+          set -euo pipefail
+          # No --delete: OUT holds only the two index.html files, so this
+          # overwrites the landing + redirect and leaves every class page and
+          # module landing untouched.
+          aws s3 sync "$DOCS_OUT" s3://aws-cdk-ruby-gems/docs/ --no-progress
+          DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?contains(Aliases.Items, 'rubygems.omarqureshi.net')].Id | [0]" \
+            --output text)
+          if [ "$DIST_ID" != "None" ] && [ -n "$DIST_ID" ]; then
+            INV_ID=$(aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
+              --paths '/docs/index.html' '/docs/AWSCDK/index.html' \
+              --query 'Invalidation.Id' --output text)
+            aws cloudfront wait invalidation-completed --distribution-id "$DIST_ID" --id "$INV_ID"
+            echo "invalidated the docs landing on $DIST_ID"
+          else
+            echo "::error::no CloudFront distribution for rubygems.omarqureshi.net"
+            exit 1
+          fi

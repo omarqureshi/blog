@@ -37,7 +37,20 @@ modules = assembly.fetch('submodules', {}).filter_map do |fqn, sub|
   { name: name, leaf: name.split('::').last }
 end.uniq { |m| m[:name] }.sort_by { |m| m[:name].downcase }
 
-built = File.directory?(awscdk) ? Dir.children(awscdk).select { |d| File.directory?(File.join(awscdk, d)) } : []
+# DOCS_ASSUME_BUILT=1 is the fast "landing only" mode: the class-page tree
+# isn't present (no YARD run), so instead of probing the filesystem for which
+# modules/types were built, assume every module and root type in the assembly
+# has a live page — true for the site, which always full-builds all modules.
+# Lets the landing be regenerated from the assembly alone, fully linked.
+assume_built = ENV['DOCS_ASSUME_BUILT'] == '1'
+built =
+  if assume_built
+    modules.map { |m| m[:leaf] }
+  elsif File.directory?(awscdk)
+    Dir.children(awscdk).select { |d| File.directory?(File.join(awscdk, d)) }
+  else
+    []
+  end
 built = built.to_set
 
 esc = ->(s) { s.to_s.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;') }
@@ -54,23 +67,32 @@ end.join("\n    ")
 # dirs). List them from the built pages; kind comes from the assembly.
 norm = ->(s) { s.downcase.gsub(/[^a-z0-9]/, '') }
 root_kind = {}
+root_types = []
 assembly.fetch('types', {}).each do |fqn, t|
   next unless fqn.count('.') == 1 && fqn.start_with?("#{assembly['name']}.")
 
-  root_kind[norm.call(fqn.rpartition('.').last)] = t['kind']
+  short = fqn.rpartition('.').last
+  root_kind[norm.call(short)] = t['kind']
+  root_types << { name: short, href: "#{short}.html", kind: t['kind'] }
 end
-core = Dir.glob(File.join(awscdk, '*.html')).filter_map do |f|
-  base = File.basename(f)
-  next if base == 'index.html'
+core =
+  if assume_built
+    # Assembly-driven: every root type has a live AWSCDK/<Type>.html page.
+    root_types
+  else
+    Dir.glob(File.join(awscdk, '*.html')).filter_map do |f|
+      base = File.basename(f)
+      next if base == 'index.html'
 
-  name = File.basename(f, '.html')
-  # Only real root types, not orphan module pages. A type-less submodule with a README
-  # (e.g. the deprecated AWSCDK::Assets tombstone) still gets a YARD module page at
-  # AWSCDK/<Name>.html; the assembly has no root type by that name, so skip it.
-  next unless root_kind.key?(norm.call(name))
+      name = File.basename(f, '.html')
+      # Only real root types, not orphan module pages. A type-less submodule with a README
+      # (e.g. the deprecated AWSCDK::Assets tombstone) still gets a YARD module page at
+      # AWSCDK/<Name>.html; the assembly has no root type by that name, so skip it.
+      next unless root_kind.key?(norm.call(name))
 
-  { name: name, href: base, kind: root_kind[norm.call(name)] }
-end.sort_by { |c| c[:name].downcase }
+      { name: name, href: base, kind: root_kind[norm.call(name)] }
+    end
+  end.sort_by { |c| c[:name].downcase }
 
 core_render = lambda do |items|
   links = items.map do |c|
